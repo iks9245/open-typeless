@@ -21,6 +21,9 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -33,8 +36,24 @@ const createWindow = () => {
     );
   }
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // Block navigation to external URLs
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowedOrigins = [
+      MAIN_WINDOW_VITE_DEV_SERVER_URL,
+      'file://',
+    ].filter(Boolean);
+    const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
+    if (!isAllowed) {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  // Open DevTools in development only
+  if (process.env.NODE_ENV !== 'production') {
+    mainWindow.webContents.openDevTools();
+  }
 
   // Create the floating window (hidden initially)
   floatingWindow.create();

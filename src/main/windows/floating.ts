@@ -106,6 +106,20 @@ export class FloatingWindowManager {
     // NOTE: Temporarily disabled - may cause dock icon to hide on macOS
     // this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
+    // Block navigation to external URLs
+    this.window.webContents.on('will-navigate', (event, url) => {
+      const allowedOrigins = [
+        FLOATING_WINDOW_VITE_DEV_SERVER_URL,
+        'file://',
+      ].filter(Boolean);
+      const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
+      if (!isAllowed) {
+        event.preventDefault();
+      }
+    });
+
+    this.window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
     // Load the floating window HTML
     if (FLOATING_WINDOW_VITE_DEV_SERVER_URL) {
       // In dev mode, we need to explicitly load floating.html

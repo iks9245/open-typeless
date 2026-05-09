@@ -4,12 +4,12 @@
  */
 
 /**
- * ASR configuration for Volcengine service.
+ * Runtime ASR configuration overrides (whisper.cpp backend).
+ * All fields are optional — defaults come from environment variables.
  */
 export interface ASRConfig {
-  appId: string;
-  accessToken: string;
-  resourceId: string; // "volc.bigasr.sauc.duration"
+  serverUrl?: string; // default: WHISPER_SERVER_URL or "http://localhost:8080"
+  language?: string;  // e.g. "zh", "en" — default: WHISPER_LANGUAGE or auto-detect
 }
 
 /**

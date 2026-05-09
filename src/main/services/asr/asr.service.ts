@@ -6,8 +6,8 @@
 
 import { EventEmitter } from 'events';
 import log from 'electron-log';
-import { VolcengineClient } from './lib/volcengine-client';
-import { loadASRConfig, ConfigurationError } from './lib/config';
+import { WhisperClient } from './lib/whisper-client';
+import { loadWhisperConfig } from './lib/config';
 import { floatingWindow } from '../../windows';
 import type { ASRConfig, ASRResult, ASRStatus } from '../../../shared/types/asr';
 
@@ -57,7 +57,7 @@ export interface ASRService {
  * ```
  */
 export class ASRService extends EventEmitter {
-  private client: VolcengineClient | null = null;
+  private client: WhisperClient | null = null;
   private status: ASRStatus = 'idle';
   private finalResult: ASRResult | null = null;
   private lastResult: ASRResult | null = null;
@@ -85,30 +85,12 @@ export class ASRService extends EventEmitter {
     logger.info('Starting ASR session');
     this.reset();
 
-    // Load configuration from environment
-    let envConfig;
-    try {
-      envConfig = loadASRConfig();
-    } catch (error) {
-      if (error instanceof ConfigurationError) {
-        logger.error('ASR configuration error', { message: error.message });
-        this.updateStatus('error');
-        this.emit('error', error);
-        floatingWindow.sendError(error.message);
-        throw error;
-      }
-      throw error;
-    }
+    // Load whisper.cpp config (env vars + optional runtime overrides)
+    const whisperConfig = loadWhisperConfig();
+    if (config?.serverUrl) whisperConfig.serverUrl = config.serverUrl;
+    if (config?.language) whisperConfig.language = config.language;
 
-    // Merge with optional runtime config
-    const clientConfig = {
-      appId: config?.appId ?? envConfig.appId,
-      accessToken: config?.accessToken ?? envConfig.accessToken,
-      resourceId: config?.resourceId ?? envConfig.resourceId,
-    };
-
-    // Create Volcengine client
-    this.client = new VolcengineClient(clientConfig);
+    this.client = new WhisperClient(whisperConfig);
 
     // Setup event forwarding
     this.setupClientListeners();
@@ -116,13 +98,13 @@ export class ASRService extends EventEmitter {
     // Show floating window and update status
     this.updateStatus('connecting');
 
-    // Connect to Volcengine service
+    // Verify whisper.cpp server is reachable
     try {
       await this.client.connect();
       logger.info('ASR session started successfully');
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      logger.error('Failed to connect to ASR service', { error: err.message });
+      logger.error('Failed to connect to whisper.cpp server', { error: err.message });
       this.updateStatus('error');
       this.emit('error', err);
       floatingWindow.sendError(`Connection failed: ${err.message}`);
@@ -223,7 +205,7 @@ export class ASRService extends EventEmitter {
     });
 
     this.client.on('error', (error) => {
-      logger.error('Volcengine client error', { message: error.message });
+      logger.error('Whisper client error', { message: error.message });
       this.updateStatus('error');
       this.emit('error', error);
       floatingWindow.sendError(error.message);

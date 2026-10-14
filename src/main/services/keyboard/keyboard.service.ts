@@ -9,6 +9,7 @@
 
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import log from 'electron-log';
+import { permissionsService } from '../permissions';
 
 const logger = log.scope('keyboard-service');
 
@@ -86,31 +87,53 @@ export class KeyboardService {
   /**
    * Register callbacks for key down/up events.
    *
+   * Refuses to start when macOS Accessibility is not trusted: libuiohook's hook
+   * fails to start without it, and that failure path in uiohook-napi aborts the
+   * whole process (uv_mutex_destroy on a locked mutex) instead of throwing.
+   *
    * @param onKeyDown - Called when trigger key is pressed
    * @param onKeyUp - Called when trigger key is released (after min duration)
+   * @returns true if the hook is running
    */
-  register(onKeyDown: () => void, onKeyUp: () => void): void {
+  register(onKeyDown: () => void, onKeyUp: () => void): boolean {
     if (this.isStarted) {
       logger.warn('KeyboardService already registered, unregistering first');
       this.unregister();
     }
 
-    this.onKeyDown = onKeyDown;
-    this.onKeyUp = onKeyUp;
+    if (!permissionsService.getAccessibilityStatus()) {
+      logger.warn('Accessibility not trusted, not starting keyboard hook');
+      return false;
+    }
 
     // Create bound handlers
-    this.boundKeyDownHandler = (e) => this.handleKeyDown(e.keycode);
-    this.boundKeyUpHandler = (e) => this.handleKeyUp(e.keycode);
+    const keyDownHandler = (e: { keycode: number }) => this.handleKeyDown(e.keycode);
+    const keyUpHandler = (e: { keycode: number }) => this.handleKeyUp(e.keycode);
 
     // Register event listeners
-    uIOhook.on('keydown', this.boundKeyDownHandler);
-    uIOhook.on('keyup', this.boundKeyUpHandler);
+    uIOhook.on('keydown', keyDownHandler);
+    uIOhook.on('keyup', keyUpHandler);
 
     // Start the hook
-    uIOhook.start();
+    try {
+      uIOhook.start();
+    } catch (error) {
+      uIOhook.off('keydown', keyDownHandler);
+      uIOhook.off('keyup', keyUpHandler);
+      logger.error('Failed to start keyboard hook', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+
+    this.onKeyDown = onKeyDown;
+    this.onKeyUp = onKeyUp;
+    this.boundKeyDownHandler = keyDownHandler;
+    this.boundKeyUpHandler = keyUpHandler;
     this.isStarted = true;
 
     logger.info('KeyboardService registered: Hold Right Option to trigger');
+    return true;
   }
 
   /**

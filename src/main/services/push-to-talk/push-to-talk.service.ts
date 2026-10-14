@@ -14,7 +14,8 @@
  * 9. Floating window hides
  */
 
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
+import type { MessageBoxOptions } from 'electron';
 import log from 'electron-log';
 import { keyboardService } from '../keyboard';
 import { textInputService } from '../text-input';
@@ -27,6 +28,9 @@ import { floatingWindow } from '../../windows';
 import { IPC_CHANNELS } from '../../../shared/constants/channels';
 
 const logger = log.scope('push-to-talk-service');
+
+/** How often to re-check Accessibility while waiting for the user to grant it */
+const ACCESSIBILITY_POLL_MS = 2000;
 
 /**
  * Push-to-Talk Service configuration.
@@ -70,6 +74,11 @@ export class PushToTalkService {
   private isInitialized = false;
   /** History row of the active session; null when history is off or unavailable */
   private historyId: string | null = null;
+  /** Polls for Accessibility trust; null when not waiting for it */
+  private accessibilityPoll: NodeJS.Timeout | null = null;
+  private readonly onAppActivated = (): void => {
+    this.tryStartKeyboardHook();
+  };
 
   constructor(config: Partial<PushToTalkConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -90,11 +99,13 @@ export class PushToTalkService {
     // Log permission status for debugging
     permissionsService.logPermissionStatus();
 
-    // Register keyboard hooks
-    keyboardService.register(
-      () => this.handleKeyDown(),
-      () => this.handleKeyUp()
-    );
+    // The hook must not start without Accessibility (see KeyboardService.register);
+    // wait for the grant instead so the app keeps running
+    if (permissionsService.getAccessibilityStatus()) {
+      this.tryStartKeyboardHook();
+    } else {
+      this.waitForAccessibility();
+    }
 
     this.isInitialized = true;
     logger.info('PushToTalkService initialized');
@@ -119,10 +130,95 @@ export class PushToTalkService {
     }
 
     // Unregister keyboard hooks
+    this.stopWaitingForAccessibility();
     keyboardService.unregister();
 
     this.isInitialized = false;
     logger.info('PushToTalkService disposed');
+  }
+
+  /**
+   * Start the keyboard hook if Accessibility is trusted.
+   * Stops waiting once the hook starts, or when it fails for another reason
+   * (retrying a failed native start is not safe).
+   *
+   * @returns true if the hook is running
+   */
+  private tryStartKeyboardHook(): boolean {
+    if (keyboardService.isActive) {
+      return true;
+    }
+
+    if (!permissionsService.getAccessibilityStatus()) {
+      return false;
+    }
+
+    const started = keyboardService.register(
+      () => this.handleKeyDown(),
+      () => this.handleKeyUp()
+    );
+
+    if (this.accessibilityPoll) {
+      this.stopWaitingForAccessibility();
+      logger.info(started
+        ? 'Accessibility granted, push-to-talk enabled'
+        : 'Accessibility granted but keyboard hook failed to start');
+    }
+
+    return started;
+  }
+
+  /**
+   * Guide the user to grant Accessibility and start the hook once they do,
+   * re-checking on a timer and whenever the app is activated (e.g. returning from System Settings).
+   */
+  private waitForAccessibility(): void {
+    logger.warn('Accessibility not granted: push-to-talk is disabled until it is granted');
+
+    this.accessibilityPoll = setInterval(() => this.tryStartKeyboardHook(), ACCESSIBILITY_POLL_MS);
+    app.on('did-become-active', this.onAppActivated);
+
+    this.showAccessibilityGuidance();
+  }
+
+  private stopWaitingForAccessibility(): void {
+    if (this.accessibilityPoll) {
+      clearInterval(this.accessibilityPoll);
+      this.accessibilityPoll = null;
+    }
+    app.off('did-become-active', this.onAppActivated);
+  }
+
+  /**
+   * Explain why Accessibility is needed and offer to open System Settings.
+   * Shown as a sheet on a visible window: without a parent, macOS runs the alert
+   * modally and blocks the main process (including the poll) until it is dismissed.
+   */
+  private showAccessibilityGuidance(): void {
+    const parent = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed() && win.isVisible());
+    const options: MessageBoxOptions = {
+      type: 'warning',
+      message: 'Accessibility permission required',
+      detail:
+        `${app.getName()} needs Accessibility access to detect the push-to-talk key (Right Option) ` +
+        'and insert text.\n\n' +
+        `Open System Settings > Privacy & Security > Accessibility and turn on ${app.getName()}. ` +
+        'Push-to-talk starts automatically once access is granted; no restart is needed.',
+      buttons: ['Open System Settings', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    };
+
+    (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options)).then(({ response }) => {
+      if (response !== 0 || !this.accessibilityPoll) {
+        return;
+      }
+      // Prompting adds the app to the Accessibility list so the user only has to switch it on
+      permissionsService.getAccessibilityStatus(true);
+      permissionsService.openSettings('accessibility');
+    }).catch((error) => {
+      logger.error('Failed to show accessibility guidance', { error });
+    });
   }
 
   /**

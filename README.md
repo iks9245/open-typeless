@@ -2,31 +2,31 @@
 
 > **This project is a showcase for the [Trellis](https://github.com/mindfold-ai/Trellis) framework.**
 >
-> **本项目是 [Trellis](https://github.com/mindfold-ai/Trellis) 框架的示例项目。**
+> **本專案是 [Trellis](https://github.com/mindfold-ai/Trellis) 框架的示範專案。**
 
 ---
 
-macOS 语音输入工具：按住快捷键说话，松开后自动把文字插入到光标位置。语音识别在本机通过 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 完成，音频不会上传到云端。
+macOS 語音輸入工具：按住快捷鍵說話，放開後自動把文字插入到游標位置。語音辨識在本機透過 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 完成，音訊不會上傳到雲端。
 
-## 功能特性
+## 功能特色
 
-- 🎤 **Push-to-Talk** - 按住右 Option 键说话，松开自动输入
-- 🖥️ **本地识别** - 使用本机运行的 whisper.cpp 服务器，支持自动检测语言（含中英混合）
-- 🪟 **悬浮窗显示** - 显示录音状态和识别结果，不抢焦点
-- 🎯 **光标插入** - 自动将文字插入到当前光标位置，无需切换窗口
-- 🗂️ **转写历史** - 每次听写的结果、时长、延迟和插入结果保存在本地 SQLite
-- ⚙️ **可修改的设置** - whisper 服务器地址、语言、是否自动插入、历史保存策略
+- 🎤 **Push-to-Talk** - 按住右 Option 鍵說話，放開自動輸入
+- 🖥️ **本機辨識** - 使用本機執行的 whisper.cpp 伺服器，支援自動偵測語言（含中英混合）
+- 🪟 **浮動視窗** - 顯示錄音狀態與辨識結果，不搶焦點
+- 🎯 **游標插入** - 自動將文字插入到目前游標位置，不需切換視窗
+- 🗂️ **轉寫歷史** - 每次聽寫的結果、時長、延遲與插入結果都存在本機 SQLite
+- ⚙️ **可調整的設定** - whisper 伺服器位址、語言、是否自動插入、歷史保存方式
 
-## 系统要求
+## 系統需求
 
-- macOS 12.0+（已在 Apple Silicon 上验证）
-- Node.js 22（Vite 要求 18 或 20 以上）
+- macOS 12.0 以上（已在 Apple Silicon 上驗證）
+- Node.js 22（Vite 需要 18 或 20 以上）
 - pnpm 10
-- 已编译的 whisper.cpp 及一个 ggml 模型
+- 已編譯的 whisper.cpp 與一個 ggml 模型
 
-## 快速开始
+## 快速開始
 
-### 1. 准备 whisper.cpp
+### 1. 準備 whisper.cpp
 
 ```bash
 git clone https://github.com/ggml-org/whisper.cpp ~/whisper.cpp
@@ -35,185 +35,185 @@ cmake -B build && cmake --build build -j --config Release
 ./models/download-ggml-model.sh large-v3-turbo
 ```
 
-`large-v3-turbo` 识别中文效果较好；机器较慢时可改用 `base` 或 `small`。
+`large-v3-turbo` 辨識中文效果較好；電腦較慢時可改用 `base` 或 `small`。
 
-### 2. 启动 whisper.cpp 服务器
+### 2. 啟動 whisper.cpp 伺服器
 
-使用期间请保持这个终端窗口开启：
+使用期間請保持這個終端機視窗開著：
 
 ```bash
 cd ~/whisper.cpp
 ./build/bin/whisper-server -m models/ggml-large-v3-turbo.bin -l auto --host 127.0.0.1 --port 8080
 ```
 
-- `-l auto`：自动检测语言。**不加时服务器默认按英文识别**，中文会识别错误
-- `--host 127.0.0.1`：只接受本机连接
+- `-l auto`：自動偵測語言。**不加的話伺服器預設以英文辨識**，中文會辨識錯誤
+- `--host 127.0.0.1`：只接受本機連線
 
-### 3. 安装依赖
+### 3. 安裝依賴套件
 
 ```bash
 pnpm install
 ```
 
-### 4. 配置环境变量（可选）
+### 4. 設定環境變數（選用）
 
-开发模式会读取项目根目录的 `.env`：
+開發模式會讀取專案根目錄的 `.env`：
 
 ```bash
 cp .env.example .env
 ```
 
 ```env
-# whisper.cpp 服务器地址（默认 http://localhost:8080）
+# whisper.cpp 伺服器位址（預設 http://localhost:8080）
 WHISPER_SERVER_URL=http://localhost:8080
 
-# 语言提示（可选，不设置则自动检测），例如 zh、en、ja
+# 語言提示（選用，不設定則自動偵測），例如 zh、en、ja
 # WHISPER_LANGUAGE=zh
 ```
 
-打包后的应用不读取 `.env`，使用默认值或已保存的设置（见下文「设置」）。
+打包後的 app 不會讀取 `.env`，會使用預設值或已儲存的設定（見下方「轉寫歷史與設定」）。
 
-### 5. 启动应用
+### 5. 啟動 app
 
 ```bash
 pnpm start
 ```
 
-### 6. 授权系统权限
+### 6. 授予系統權限
 
-| 权限 | 用途 | 说明 |
+| 權限 | 用途 | 說明 |
 |---|---|---|
-| 麦克风 | 录音 | 启动时会弹出请求，请选择允许 |
-| 辅助功能 | 全局快捷键、插入文字 | 未授权时应用会弹出说明，可一键打开系统设置；授权后无需重启即可使用 |
-| 输入监控 | 全局快捷键 | 在「系统设置」-「隐私与安全性」-「输入监控」中加入 |
+| 麥克風 | 錄音 | 啟動時會跳出請求，請選擇允許 |
+| 輔助使用 | 全域快捷鍵、插入文字 | 未授權時 app 會跳出說明，可一鍵開啟系統設定；授權後不需重新啟動即可使用 |
+| 輸入監控 | 全域快捷鍵 | 在「系統設定」-「隱私權與安全性」-「輸入監控」中加入 |
 
-> 使用 `pnpm start` 时，权限会归属于启动它的程序（例如「终端」）。
+> 使用 `pnpm start` 時，權限會歸屬於啟動它的程式（例如「終端機」）。
 
-## 使用方法
+## 使用方式
 
-1. 启动 whisper.cpp 服务器和本应用
-2. 在任意应用中，**按住右 Option 键**开始录音
-3. 悬浮窗显示录音状态
-4. **松开按键**后，文字识别完成并插入到光标位置，悬浮窗 2 秒后自动隐藏
-5. 按住少于 200 毫秒视为误触，会直接取消，不识别也不插入
+1. 啟動 whisper.cpp 伺服器與本 app
+2. 在任何 app 中，**按住右 Option 鍵**開始錄音
+3. 浮動視窗會顯示錄音狀態
+4. **放開按鍵**後，辨識完成的文字會插入到游標位置，浮動視窗 2 秒後自動隱藏
+5. 按住不到 200 毫秒會被視為誤觸，直接取消，不辨識也不插入
 
-## 转写历史与设置
+## 轉寫歷史與設定
 
-数据保存在本机：
+資料都存在本機：
 
-| 内容 | 位置 |
+| 內容 | 位置 |
 |---|---|
-| 数据库 | `~/Library/Application Support/open-typeless/open-typeless.db` |
-| 音频（默认不保存） | `~/Library/Application Support/open-typeless/audio/` |
-| 日志 | `~/Library/Logs/open-typeless/main.log` |
+| 資料庫 | `~/Library/Application Support/open-typeless/open-typeless.db` |
+| 錄音（預設不保存） | `~/Library/Application Support/open-typeless/audio/` |
+| 記錄檔 | `~/Library/Logs/open-typeless/main.log` |
 
-每次听写记录为一条 `transcriptions` 数据，状态为 `completed`、`empty`（没有识别到文字）或 `failed`（附带原因，例如 `start_failed`、`transcription_failed`）。应用在录音中途被强制结束时，下次启动会自动标记为 `failed / interrupted`。
+每次聽寫會記錄成一筆 `transcriptions` 資料，狀態為 `completed`、`empty`（沒有辨識到文字）或 `failed`（附帶原因，例如 `start_failed`、`transcription_failed`）。若錄音途中 app 被強制結束，下次啟動時會自動標記為 `failed / interrupted`。
 
-可用设置及默认值：
+可用設定與預設值：
 
-| 设置 | 默认 | 说明 |
+| 設定 | 預設 | 說明 |
 |---|---|---|
-| `history.enabled` | `true` | 是否记录历史 |
-| `history.saveAudio` | `false` | 是否保存录音 |
-| `history.retentionDays` | 不限 | 保留天数，每次启动时清理 |
-| `asr.whisperServerUrl` | `.env` 或 `http://localhost:8080` | whisper.cpp 服务器地址 |
-| `asr.language` | `.env` 或自动检测 | 语言提示 |
-| `input.autoInsert` | `true` | 是否自动插入文字 |
+| `history.enabled` | `true` | 是否記錄歷史 |
+| `history.saveAudio` | `false` | 是否保存錄音 |
+| `history.retentionDays` | 不限 | 保留天數，每次啟動時清理 |
+| `asr.whisperServerUrl` | `.env` 或 `http://localhost:8080` | whisper.cpp 伺服器位址 |
+| `asr.language` | `.env` 或自動偵測 | 語言提示 |
+| `input.autoInsert` | `true` | 是否自動插入文字 |
 
-目前还没有设置界面；历史和设置已通过 `window.api.history` 与 `window.api.settings` 提供给渲染进程，界面将在后续加入。
+目前還沒有設定介面；歷史與設定已透過 `window.api.history` 和 `window.api.settings` 提供給渲染程序，介面會在之後加入。
 
-数据库无法打开时，应用仍可正常听写，只是不记录历史。
+資料庫無法開啟時，app 仍可正常聽寫，只是不記錄歷史。
 
-## 项目结构
+## 專案結構
 
 ```
 src/
-├── main.ts                 # Electron 主进程入口（启动时初始化数据库）
-├── preload.ts              # 预加载脚本 (IPC 桥接)
-├── renderer.ts             # 渲染进程入口（录音）
+├── main.ts                 # Electron 主程序入口（啟動時初始化資料庫）
+├── preload.ts              # 預載腳本（IPC 橋接）
+├── renderer.ts             # 渲染程序入口（錄音）
 ├── main/
-│   ├── db/                 # SQLite 连接、schema、migration
-│   ├── ipc/                # IPC 处理器
+│   ├── db/                 # SQLite 連線、schema、migration
+│   ├── ipc/                # IPC 處理器
 │   ├── services/
-│   │   ├── asr/            # whisper.cpp 客户端与 ASR 会话
-│   │   ├── history/        # 转写历史
-│   │   ├── settings/       # 应用设置
-│   │   ├── keyboard/       # 全局键盘监听
-│   │   ├── permissions/    # macOS 权限
-│   │   ├── push-to-talk/   # Push-to-Talk 协调服务
+│   │   ├── asr/            # whisper.cpp 用戶端與 ASR 工作階段
+│   │   ├── history/        # 轉寫歷史
+│   │   ├── settings/       # app 設定
+│   │   ├── keyboard/       # 全域鍵盤監聽
+│   │   ├── permissions/    # macOS 權限
+│   │   ├── push-to-talk/   # Push-to-Talk 協調服務
 │   │   └── text-input/     # 文字插入
-│   └── windows/            # 窗口管理
+│   └── windows/            # 視窗管理
 ├── renderer/
-│   └── src/modules/asr/    # 录音与悬浮窗组件
-└── shared/                 # 共享类型和常量
-drizzle/                    # 数据库 migration（随应用打包）
+│   └── src/modules/asr/    # 錄音與浮動視窗元件
+└── shared/                 # 共用型別與常數
+drizzle/                    # 資料庫 migration（隨 app 打包）
 ```
 
-## 开发
+## 開發
 
 ```bash
-pnpm start          # 启动开发模式
-pnpm typecheck      # 类型检查
-pnpm lint           # 代码检查
-pnpm db:generate    # 修改 src/main/db/schema.ts 后生成 migration
+pnpm start          # 啟動開發模式
+pnpm typecheck      # 型別檢查
+pnpm lint           # 程式碼檢查
+pnpm db:generate    # 修改 src/main/db/schema.ts 後產生 migration
 pnpm package        # 打包
-pnpm make           # 构建安装包
+pnpm make           # 建置安裝檔
 ```
 
-数据库约定见 `.trellis/spec/backend/database-guidelines.md`。
+資料庫慣例請見 `.trellis/spec/backend/database-guidelines.md`。
 
-### 打包与签名
+### 打包與簽章
 
-没有配置签名证书时，打包流程会对 `.app` 做 ad-hoc 签名，使签名标识与 bundle ID（`com.electron.open-typeless`）一致，否则 macOS 不会弹出麦克风授权。
+沒有設定簽章憑證時，打包流程會對 `.app` 進行 ad-hoc 簽章，讓簽章識別碼與 bundle ID（`com.electron.open-typeless`）一致，否則 macOS 不會跳出麥克風授權。
 
-ad-hoc 签名在每次重新打包后都会改变，macOS 可能会再次询问钥匙串、麦克风和辅助功能权限。正式分发前需要在 `forge.config.ts` 的 `packagerConfig.osxSign` 中配置固定的签名证书。
+ad-hoc 簽章在每次重新打包後都會改變，macOS 可能會再次詢問鑰匙圈、麥克風與輔助使用權限。正式發佈前，需要在 `forge.config.ts` 的 `packagerConfig.osxSign` 設定固定的簽章憑證。
 
-## 技术栈
+## 技術架構
 
-- **Electron** - 桌面应用框架
+- **Electron** - 桌面應用程式框架
 - **React** - UI 框架
-- **TypeScript** - 类型安全
-- **Vite** - 构建工具
-- **whisper.cpp** - 本地语音识别
-- **better-sqlite3 + Drizzle** - 本地数据库
-- **uiohook-napi** - 全局键盘监听
+- **TypeScript** - 型別安全
+- **Vite** - 建置工具
+- **whisper.cpp** - 本機語音辨識
+- **better-sqlite3 + Drizzle** - 本機資料庫
+- **uiohook-napi** - 全域鍵盤監聽
 - **node-insert-text** - 文字插入
 
-## 常见问题
+## 常見問題
 
-### Q: 提示 "Cannot reach whisper.cpp server"？
+### Q：出現「Cannot reach whisper.cpp server」？
 
-whisper.cpp 服务器没有运行，或地址不对。按「启动 whisper.cpp 服务器」一节启动后即可使用，无需重启应用。
+whisper.cpp 伺服器沒有在執行，或位址不正確。依照「啟動 whisper.cpp 伺服器」一節啟動後即可使用，不需要重新啟動 app。
 
-### Q: 每次都插入 "Thank you." 之类的文字？
+### Q：每次都插入「Thank you.」之類的文字？
 
-这是 whisper 在收到静音时产生的幻觉文字，通常表示没有录到声音：
+這是 whisper 收到靜音時產生的幻覺文字，通常代表沒有錄到聲音：
 
-1. 确认应用已获得麦克风权限（「系统设置」-「隐私与安全性」-「麦克风」）
-2. 打包版若不在麦克风列表中，请重新执行 `pnpm package`，确认签名标识为 `com.electron.open-typeless`：`codesign -dv out/open-typeless-darwin-arm64/open-typeless.app`
+1. 確認 app 已取得麥克風權限（「系統設定」-「隱私權與安全性」-「麥克風」）
+2. 若打包版沒有出現在麥克風清單中，請重新執行 `pnpm package`，並確認簽章識別碼為 `com.electron.open-typeless`：`codesign -dv out/open-typeless-darwin-arm64/open-typeless.app`
 
-### Q: 中文被识别成英文？
+### Q：中文被辨識成英文？
 
-whisper.cpp 服务器启动时需要加上 `-l auto`，或在 `.env` 中设置 `WHISPER_LANGUAGE=zh`。
+啟動 whisper.cpp 伺服器時需要加上 `-l auto`，或在 `.env` 中設定 `WHISPER_LANGUAGE=zh`。
 
-### Q: 快捷键没有反应？
+### Q：快捷鍵沒有反應？
 
-确认已授权「辅助功能」和「输入监控」。未授权辅助功能时，应用会弹出说明；授权后会自动启用，无需重启。
+確認已授予「輔助使用」與「輸入監控」權限。未授予輔助使用權限時，app 會跳出說明；授權後會自動啟用，不需重新啟動。
 
-### Q: 文字无法插入？
+### Q：文字無法插入？
 
-1. 确保光标在文本输入区域
-2. 检查「辅助功能」权限
-3. 确认设置 `input.autoInsert` 没有被关闭
+1. 確認游標在文字輸入區域
+2. 檢查「輔助使用」權限
+3. 確認設定 `input.autoInsert` 沒有被關閉
 
-### Q: 专有名词识别不准？
+### Q：專有名詞辨識不準？
 
-whisper 对产品名等专有名词容易误认，例如把 Typeless 识别成 timeless。自定义词汇表在后续计划中。
+whisper 對產品名稱等專有名詞容易誤認，例如把 Typeless 辨識成 timeless。自訂詞彙表已列入後續規劃。
 
-### Q: 如何更换快捷键？
+### Q：如何更換快捷鍵？
 
-目前快捷键固定为右 Option 键。如需自定义，可修改 `src/main/services/keyboard/keyboard.service.ts` 中的 `triggerKey` 配置。
+目前快捷鍵固定為右 Option 鍵。如需自訂，可修改 `src/main/services/keyboard/keyboard.service.ts` 中的 `triggerKey` 設定。
 
-## License
+## 授權條款
 
 MIT

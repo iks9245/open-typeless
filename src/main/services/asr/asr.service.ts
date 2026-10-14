@@ -183,6 +183,21 @@ export class ASRService extends EventEmitter {
   }
 
   /**
+   * Abandon the active session without transcribing it.
+   * Buffered audio is discarded and nothing is sent to the engine; status returns to idle.
+   * Call after start() has settled, as with stop().
+   */
+  cancel(): void {
+    if (!this.client || this.status === 'idle') {
+      logger.debug('No active ASR session to cancel');
+      return;
+    }
+
+    logger.info('Cancelling ASR session');
+    this.cleanup();
+  }
+
+  /**
    * Process an audio chunk.
    * The chunk should be PCM 16-bit, 16kHz, mono format.
    *

@@ -40,7 +40,6 @@ const DEFAULT_CONFIG: KeyboardConfig = {
 interface KeyboardState {
   isKeyHeld: boolean;
   lastKeyDownTime: number;
-  lastKeyUpTime: number;
   recordingStartTime: number;
 }
 
@@ -54,7 +53,8 @@ interface KeyboardState {
  * ```typescript
  * keyboardService.register(
  *   () => console.log('Key down - start recording'),
- *   () => console.log('Key up - stop recording')
+ *   () => console.log('Key up - stop recording'),
+ *   (durationMs) => console.log(`Released after ${durationMs} ms - cancel recording`)
  * );
  * ```
  */
@@ -63,12 +63,12 @@ export class KeyboardService {
   private state: KeyboardState = {
     isKeyHeld: false,
     lastKeyDownTime: 0,
-    lastKeyUpTime: 0,
     recordingStartTime: 0,
   };
 
   private onKeyDown: (() => void) | null = null;
   private onKeyUp: (() => void) | null = null;
+  private onCancel: ((durationMs: number) => void) | null = null;
   private isStarted = false;
 
   // Bound handlers for proper cleanup
@@ -91,11 +91,18 @@ export class KeyboardService {
    * fails to start without it, and that failure path in uiohook-napi aborts the
    * whole process (uv_mutex_destroy on a locked mutex) instead of throwing.
    *
+   * Every press that reached onKeyDown ends in exactly one of onKeyUp or onCancel.
+   *
    * @param onKeyDown - Called when trigger key is pressed
-   * @param onKeyUp - Called when trigger key is released (after min duration)
+   * @param onKeyUp - Called when trigger key is released after at least minRecordingMs
+   * @param onCancel - Called instead of onKeyUp when the press was shorter than minRecordingMs
    * @returns true if the hook is running
    */
-  register(onKeyDown: () => void, onKeyUp: () => void): boolean {
+  register(
+    onKeyDown: () => void,
+    onKeyUp: () => void,
+    onCancel: (durationMs: number) => void,
+  ): boolean {
     if (this.isStarted) {
       logger.warn('KeyboardService already registered, unregistering first');
       this.unregister();
@@ -128,6 +135,7 @@ export class KeyboardService {
 
     this.onKeyDown = onKeyDown;
     this.onKeyUp = onKeyUp;
+    this.onCancel = onCancel;
     this.boundKeyDownHandler = keyDownHandler;
     this.boundKeyUpHandler = keyUpHandler;
     this.isStarted = true;
@@ -158,6 +166,7 @@ export class KeyboardService {
     // Clean up state
     this.onKeyDown = null;
     this.onKeyUp = null;
+    this.onCancel = null;
     this.boundKeyDownHandler = null;
     this.boundKeyUpHandler = null;
     this.isStarted = false;
@@ -187,7 +196,6 @@ export class KeyboardService {
     this.state = {
       isKeyHeld: false,
       lastKeyDownTime: 0,
-      lastKeyUpTime: 0,
       recordingStartTime: 0,
     };
   }
@@ -238,13 +246,9 @@ export class KeyboardService {
       return;
     }
 
-    // Ignore if not currently held
+    // Ignore if not currently held. No debounce here: a release of a held key is never
+    // a duplicate, and dropping one would leave the key held and the session running.
     if (!this.state.isKeyHeld) {
-      return;
-    }
-
-    // Ignore if debounced
-    if (this.isDebounced(this.state.lastKeyUpTime)) {
       return;
     }
 
@@ -253,14 +257,14 @@ export class KeyboardService {
 
     // Update state
     this.state.isKeyHeld = false;
-    this.state.lastKeyUpTime = Date.now();
 
-    // Check minimum recording duration
+    // A press shorter than the minimum still started a session; it must be cancelled
     if (recordingDuration < this.config.minRecordingMs) {
-      logger.debug('Recording too short, ignoring', {
+      logger.debug('Recording too short, cancelling', {
         duration: recordingDuration,
         minRequired: this.config.minRecordingMs,
       });
+      this.onCancel?.(recordingDuration);
       return;
     }
 

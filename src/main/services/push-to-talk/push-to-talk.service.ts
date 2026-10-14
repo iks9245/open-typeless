@@ -12,6 +12,9 @@
  * 7. ASR session stops, gets final result
  * 8. Text is inserted at cursor position
  * 9. Floating window hides
+ *
+ * A release shorter than KeyboardService's minimum cancels instead (handleCancel):
+ * nothing is transcribed or inserted, and the session's history row is removed.
  */
 
 import { app, BrowserWindow, dialog } from 'electron';
@@ -74,6 +77,8 @@ export class PushToTalkService {
   private isInitialized = false;
   /** History row of the active session; null when history is off or unavailable */
   private historyId: string | null = null;
+  /** ASR start of the active session while it is still connecting */
+  private starting: Promise<void> | null = null;
   /** Polls for Accessibility trust; null when not waiting for it */
   private accessibilityPoll: NodeJS.Timeout | null = null;
   private readonly onAppActivated = (): void => {
@@ -166,7 +171,8 @@ export class PushToTalkService {
 
     const started = keyboardService.register(
       () => this.handleKeyDown(),
-      () => this.handleKeyUp()
+      () => this.handleKeyUp(),
+      (durationMs) => this.handleCancel(durationMs)
     );
 
     if (this.accessibilityPoll) {
@@ -259,6 +265,19 @@ export class PushToTalkService {
       language: settings.success ? settings.data.asr.language : null,
     });
 
+    const starting = this.startSession();
+    this.starting = starting;
+    await starting;
+    if (this.starting === starting) {
+      this.starting = null;
+    }
+  }
+
+  /**
+   * Start ASR and recording for the session begun by handleKeyDown.
+   * Never rejects: a failure ends the session and is shown in the floating window.
+   */
+  private async startSession(): Promise<void> {
     try {
       // Show floating window with listening status
       floatingWindow.sendStatus('connecting');
@@ -294,6 +313,10 @@ export class PushToTalkService {
   private async handleKeyUp(): Promise<void> {
     if (!this.isActive) {
       logger.debug('Not recording, ignoring key up');
+      return;
+    }
+
+    if (!(await this.waitForStart())) {
       return;
     }
 
@@ -376,6 +399,58 @@ export class PushToTalkService {
   }
 
   /**
+   * Handle a press released before the minimum duration.
+   * Ends the session without transcribing: whisper.cpp turns very short or silent clips
+   * into phantom text such as "Thank you.", which must never be inserted.
+   */
+  private async handleCancel(durationMs: number): Promise<void> {
+    if (!this.isActive) {
+      logger.debug('Not recording, ignoring cancel');
+      return;
+    }
+
+    if (!(await this.waitForStart())) {
+      return;
+    }
+
+    logger.info('Push-to-talk: CANCEL (press too short)', { durationMs });
+    this.isActive = false;
+    const historyId = this.historyId;
+    this.historyId = null;
+
+    try {
+      this.notifyRendererStopRecording('idle');
+      asrService.cancel();
+    } catch (error) {
+      logger.error('Failed to cancel push-to-talk session', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    floatingWindow.hide();
+
+    // A tap is not a dictation: drop its row rather than keep an empty or failed entry
+    if (historyId) {
+      const removed = await historyService.delete({ id: historyId });
+      if (!removed.success) {
+        logger.warn('Failed to remove history of cancelled session', { error: removed.error });
+      }
+    }
+
+    logger.info('Push-to-talk session cancelled');
+  }
+
+  /**
+   * Wait for a start that is still connecting, so its 'listening' notification cannot
+   * restart recording after the session ends.
+   *
+   * @returns false if the session failed to start (already reported and ended)
+   */
+  private async waitForStart(): Promise<boolean> {
+    await this.starting;
+    return this.isActive;
+  }
+
+  /**
    * Whether the user setting allows inserting text. Defaults to true if settings are unreadable.
    */
   private isAutoInsertEnabled(): boolean {
@@ -416,11 +491,13 @@ export class PushToTalkService {
 
   /**
    * Notify renderer process to stop recording.
+   *
+   * @param status - 'processing' when the audio will be transcribed, 'idle' when it is discarded
    */
-  private notifyRendererStopRecording(): void {
+  private notifyRendererStopRecording(status: 'processing' | 'idle' = 'processing'): void {
     const mainWindow = this.getMainWindow();
     if (mainWindow) {
-      mainWindow.webContents.send(IPC_CHANNELS.ASR.STATUS, 'processing');
+      mainWindow.webContents.send(IPC_CHANNELS.ASR.STATUS, status);
     }
   }
 

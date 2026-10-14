@@ -8,7 +8,7 @@ import { EventEmitter } from 'events';
 import log from 'electron-log';
 import { WhisperClient } from './lib/whisper-client';
 import type { SpeechLevel } from './lib/speech-level';
-import { buildVocabularyPrompt } from './lib/vocabulary-prompt';
+import { buildVocabularyPrompt } from '../../../shared/lib/vocabulary-prompt';
 import { loadWhisperConfig } from './lib/config';
 import { floatingWindow } from '../../windows';
 import { settingsService } from '../settings';

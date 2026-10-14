@@ -46,4 +46,8 @@ export const IPC_CHANNELS = {
     /** Settings change (Main -> Renderer) */
     CHANGED: 'settings:changed',
   },
+  WHISPER_SERVER: {
+    /** Read the local whisper.cpp server status (Renderer -> Main) */
+    STATUS: 'whisper-server:status',
+  },
 } as const;

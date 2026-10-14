@@ -12,6 +12,7 @@ import type { ASRConfig, ASRResult, ASRStatus } from './shared/types/asr';
 import type { IpcResult } from './shared/types/common';
 import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from './shared/types/history';
 import type { AppSettings, AppSettingsPatch } from './shared/types/settings';
+import type { WhisperServerInfo } from './shared/types/whisper-server';
 
 /**
  * ASR API exposed to the renderer process.
@@ -189,10 +190,22 @@ const settingsApi = {
   },
 };
 
+/**
+ * whisper.cpp server API exposed to the renderer process.
+ */
+const whisperServerApi = {
+  /**
+   * Read the local whisper.cpp server status (file names only, no paths).
+   */
+  getStatus: (): Promise<IpcResult<WhisperServerInfo>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WHISPER_SERVER.STATUS),
+};
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('api', {
   asr: asrApi,
   floatingWindow: floatingWindowApi,
   history: historyApi,
   settings: settingsApi,
+  whisperServer: whisperServerApi,
 });

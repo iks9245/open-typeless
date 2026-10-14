@@ -303,9 +303,18 @@ T8（2026-10-14）驗證結果。「整合測試」指在真正的 Electron 主�
 - [x] `history.enabled = false` 時不產生任何列（整合測試）
 - [x] `history.saveAudio = true` 時產生 wav 檔，刪除該列時檔案一併刪除（T3、T6 測試）
 - [x] 資料庫無法開啟或 migration 失敗時，進入降級模式，log 顯示歷史停用（T7 測試：無寫入權限、migration 資料夾不存在）
-- [ ] **打包後的 app** 能啟動、建立資料庫、記錄歷史：啟動與建立資料庫 ✅（migration 從 `Resources/drizzle` 讀取）；記錄歷史 ⏳ 被既有問題擋住：未授予輔助使用權限時，`uiohook-napi` 在啟動鍵盤監聽時 abort（另開任務）
-- [ ] 文字插入的體感延遲與修改前相同：設計上歷史寫入在插入之後且不等待音訊寫檔；**實機待測**
-- [ ] 正常結束（Cmd+Q）時 log 出現 `Database closed`：**待測**。`pkill` 屬強制結束，不觸發；打包版因上述崩潰無法測
+- [x] **打包後的 app** 能啟動、建立資料庫、記錄歷史：實機聽寫 2 筆 `completed / inserted`（3.6 秒與 6.1 秒，中文及中英混合，2026-10-14 22:03）。前提：輔助使用崩潰已修（`38ce31f`）、啟動時請求麥克風（`7b40f1a`）、app 以正確識別碼簽章（見下方）
+- [x] 文字插入的體感延遲與修改前相同：歷史寫入在插入之後；實機從放開按鍵到插入約 0.6 秒，其中 whisper 轉寫約 0.5 秒
+- [x] 正常結束（Cmd+Q）時 log 出現 `Database closed`，WAL 檔已合併清除
+- [x] 錄音中途結束 app，下次啟動標為 `failed / interrupted`：實機 2 筆
+
+實機測試發現的既有問題（皆非資料層）：
+
+| 問題 | 原因 | 處理 |
+|---|---|---|
+| 每次聽寫都插入「Thank you.」 | 錄到靜音：(1) `requestMicrophonePermission()` 從未被呼叫；(2) 打包版沿用 Electron 的 ad-hoc 簽章，識別碼為 `com.github.Electron`，與 bundle ID 不符，macOS 不跳出麥克風詢問，也不列入麥克風清單 | (1) 已修（`7b40f1a`）；(2) 以 `codesign --force --deep --sign -` 重新簽章後麥克風詢問出現並可授權，已證實。**尚需在 Forge 設定中修正簽章**，否則每次打包都會復發 |
+| 短按右 Option 會卡住錄音直到結束 app | `KeyboardService` 對過短的放開事件直接忽略，但錄音在按下時已開始 | 另開任務 |
+| 靜音或極短錄音被 Whisper 幻覺成英文句子並插入 | Whisper 引擎特性 | 後續：最短錄音長度或靜音偵測 |
 
 T8 修正的既有打包問題：`ws` 與 `@xitanggg/node-insert-text-darwin-*` 未被複製進打包內容，打包版在載入主程序時即失敗（`1bed91e`）。
 

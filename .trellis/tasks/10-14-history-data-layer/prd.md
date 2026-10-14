@@ -292,17 +292,22 @@ handleKeyUp
 
 ## 11. 驗收標準
 
-- [ ] `pnpm typecheck` 與 `pnpm lint` 通過
-- [ ] 首次啟動自動建立資料庫並套用 migration
-- [ ] 一次成功聽寫產生一列 `completed`，含 `raw_text`、`final_text`、`audio_duration_ms`、`latency_ms`、`insert_status = 'inserted'`
-- [ ] 沒說話就放開，產生 `empty`
-- [ ] whisper 伺服器未啟動時，產生 `failed`，`error_code = 'start_failed'`
-- [ ] 錄音中強制結束 app，下次啟動該列變為 `failed / interrupted`
-- [ ] `history.enabled = false` 時不產生任何列
-- [ ] `history.saveAudio = true` 時產生 wav 檔，刪除該列時檔案一併刪除
-- [ ] 刪除資料庫檔案的讀取權限後啟動，app 仍可聽寫，log 顯示歷史停用
-- [ ] **打包後的 app**（`pnpm package`）能啟動、建立資料庫、記錄歷史
-- [ ] 文字插入的體感延遲與修改前相同
+T8（2026-10-14）驗證結果。「整合測試」指在真正的 Electron 主程序中，以假的 whisper 伺服器、暫存 userData、空殼文字插入執行；「實機」指使用者真實聽寫。
+
+- [x] `pnpm typecheck` 與 `pnpm lint` 通過
+- [x] 首次啟動自動建立資料庫並套用 migration（`pnpm start` 與打包版皆從零建立）
+- [x] 一次成功聽寫產生一列 `completed`，含 `raw_text`、`final_text`、`audio_duration_ms`、`latency_ms`、`insert_status = 'inserted'`（整合測試；**實機待測**）
+- [x] 沒說話就放開，產生 `empty`（整合測試）
+- [x] whisper 伺服器未啟動時，產生 `failed`，`error_code = 'start_failed'`（整合測試）
+- [x] 錄音中強制結束 app，下次啟動該列變為 `failed / interrupted`（T7 測試）
+- [x] `history.enabled = false` 時不產生任何列（整合測試）
+- [x] `history.saveAudio = true` 時產生 wav 檔，刪除該列時檔案一併刪除（T3、T6 測試）
+- [x] 資料庫無法開啟或 migration 失敗時，進入降級模式，log 顯示歷史停用（T7 測試：無寫入權限、migration 資料夾不存在）
+- [ ] **打包後的 app** 能啟動、建立資料庫、記錄歷史：啟動與建立資料庫 ✅（migration 從 `Resources/drizzle` 讀取）；記錄歷史 ⏳ 被既有問題擋住：未授予輔助使用權限時，`uiohook-napi` 在啟動鍵盤監聽時 abort（另開任務）
+- [ ] 文字插入的體感延遲與修改前相同：設計上歷史寫入在插入之後且不等待音訊寫檔；**實機待測**
+- [ ] 正常結束（Cmd+Q）時 log 出現 `Database closed`：**待測**。`pkill` 屬強制結束，不觸發；打包版因上述崩潰無法測
+
+T8 修正的既有打包問題：`ws` 與 `@xitanggg/node-insert-text-darwin-*` 未被複製進打包內容，打包版在載入主程序時即失敗（`1bed91e`）。
 
 ## 12. 待決定事項
 

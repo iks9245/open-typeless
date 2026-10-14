@@ -12,6 +12,7 @@ import log from 'electron-log';
 import type { ASRResult, ASRStatus } from '../../../../shared/types/asr';
 import type { ConnectionState } from '../types';
 import { isSilent, measureSpeech, type SpeechLevel } from './speech-level';
+import { joinSegments } from './transcript-text';
 
 const logger = log.scope('whisper-client');
 
@@ -33,6 +34,7 @@ const EMPTY_SUBMISSION: SubmittedAudio = { pcmBytes: 0, wav: null, speech: null,
 export interface WhisperClientConfig {
   serverUrl: string;
   language?: string; // e.g. "zh", "en" — undefined means auto-detect
+  prompt?: string; // vocabulary prompt (see vocabulary-prompt.ts); undefined sends none
 }
 
 // Build a minimal WAV header around raw PCM (16-bit, 16 kHz, mono)
@@ -209,6 +211,9 @@ export class WhisperClient extends EventEmitter {
     if (this.config.language) {
       formData.append('language', this.config.language);
     }
+    if (this.config.prompt) {
+      formData.append('prompt', this.config.prompt);
+    }
 
     const response = await fetch(`${this.config.serverUrl}/inference`, {
       method: 'POST',
@@ -222,7 +227,7 @@ export class WhisperClient extends EventEmitter {
     }
 
     const data = (await response.json()) as { text?: string };
-    const text = (data.text ?? '').trim();
+    const text = joinSegments(data.text ?? '');
 
     logger.info('Transcription done', { textLength: text.length });
 

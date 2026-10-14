@@ -138,6 +138,7 @@ pnpm start
 | `history.retentionDays` | 不限 | 保留天數，每次啟動時清理 |
 | `asr.whisperServerUrl` | `.env` 或 `http://localhost:8080` | whisper.cpp 伺服器位址 |
 | `asr.language` | `.env` 或自動偵測 | 語言提示 |
+| `asr.vocabulary` | 空 | 自訂詞彙表（最多 50 個，每個最長 40 字），見下方「專有名詞辨識不準」 |
 | `input.autoInsert` | `true` | 是否自動插入文字 |
 
 目前還沒有設定介面；歷史與設定已透過 `window.api.history` 和 `window.api.settings` 提供給渲染程序，介面會在之後加入。
@@ -248,7 +249,17 @@ app 沒能啟動或連上 whisper.cpp 伺服器。請查看記錄檔 `~/Library/
 
 ### Q：專有名詞辨識不準？
 
-whisper 對產品名稱等專有名詞容易誤認，例如把 Typeless 辨識成 timeless。自訂詞彙表已列入後續規劃。
+whisper 對產品名稱等專有名詞容易誤認，例如把 Typeless 辨識成 timeless。在設定 `asr.vocabulary` 加入常用詞彙後，每次辨識都會以一句提示送給 whisper，例如：
+
+```
+這段話可能會提到 Open Typeless、Trellis 和 whisper.cpp。
+```
+
+- 詞彙會去除重複，總長度超過約 150 字時，排在後面的詞彙不會送出
+- 有詞彙表時，辨識結果傾向使用**繁體中文**（whisper 會模仿提示句的寫法）
+- 以合成語音測試時，「Open Typeless」可被正確辨識；中文語音唸的英文縮寫（例如 REA）改善有限
+
+目前還沒有設定介面，詞彙表會在之後的主視窗中提供編輯。
 
 ### Q：如何更換快捷鍵？
 

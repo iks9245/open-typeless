@@ -14,8 +14,14 @@ import { cp, mkdir } from 'fs/promises';
 const nativeModules = [
   'uiohook-napi',
   '@xitanggg/node-insert-text',
+  // node-insert-text loads its binary from a per-platform package; missing ones are skipped
+  '@xitanggg/node-insert-text-darwin-arm64',
+  '@xitanggg/node-insert-text-darwin-x64',
+  '@xitanggg/node-insert-text-darwin-universal',
   // Loads its own N-API prebuild from prebuilds/; no runtime dependencies.
   'better-sqlite3',
+  // Kept external in vite.main.config.ts and required at startup; no runtime dependencies
+  'ws',
   // Dependencies
   'node-gyp-build',
 ];

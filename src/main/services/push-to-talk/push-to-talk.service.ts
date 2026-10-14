@@ -99,6 +99,17 @@ export class PushToTalkService {
     // Log permission status for debugging
     permissionsService.logPermissionStatus();
 
+    // Ask macOS for microphone access up front. Without it the status stays
+    // 'not-determined' and the renderer's getUserMedia captures silence, which
+    // whisper.cpp transcribes as phantom text such as "Thank you."
+    void permissionsService.requestMicrophonePermission().then((granted) => {
+      if (granted) {
+        logger.info('Microphone access granted');
+      } else {
+        logger.warn('Microphone access not granted: recordings will be silent until it is allowed');
+      }
+    });
+
     // The hook must not start without Accessibility (see KeyboardService.register);
     // wait for the grant instead so the app keeps running
     if (permissionsService.getAccessibilityStatus()) {

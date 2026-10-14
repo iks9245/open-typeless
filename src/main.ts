@@ -8,6 +8,7 @@ import { floatingWindow } from './main/windows';
 import { pushToTalkService } from './main/services';
 import { closeDatabase, initDatabase } from './main/db';
 import { historyService } from './main/services/history';
+import { whisperServerService } from './main/services/whisper-server';
 
 const logger = log.scope('main');
 
@@ -96,6 +97,9 @@ const initStorage = (): void => {
 // Storage is initialized once here, not in createWindow (which also runs on 'activate').
 app.on('ready', () => {
   initStorage();
+  // Start (or find) the local whisper.cpp server in the background; it reads its URL from
+  // settings, so storage comes first. Never rejects; failures are logged.
+  void whisperServerService.start();
   createWindow();
 });
 
@@ -112,6 +116,8 @@ app.on('window-all-closed', () => {
 function cleanup(): void {
   pushToTalkService.dispose();
   floatingWindow.destroy();
+  // Sends SIGTERM synchronously, only to a server this app started or adopted
+  void whisperServerService.stop();
   // Idempotent; an unfinished session is marked interrupted on next launch
   closeDatabase();
 }

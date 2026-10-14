@@ -11,7 +11,8 @@ macOS 語音輸入工具：按住快捷鍵說話，放開後自動把文字插�
 ## 功能特色
 
 - 🎤 **Push-to-Talk** - 按住右 Option 鍵說話，放開自動輸入
-- 🖥️ **本機辨識** - 使用本機執行的 whisper.cpp 伺服器，支援自動偵測語言（含中英混合）
+- 🖥️ **本機辨識** - 使用本機執行的 whisper.cpp 伺服器，支援自動偵測語言（含中英混合）；app 會自動啟動與關閉伺服器
+- 🔇 **靜音偵測** - 按住但沒說話時不送出辨識，避免 Whisper 產生「Thank you.」之類的幻覺文字
 - 🪟 **浮動視窗** - 顯示錄音狀態與辨識結果，不搶焦點
 - 🎯 **游標插入** - 自動將文字插入到目前游標位置，不需切換視窗
 - 🗂️ **轉寫歷史** - 每次聽寫的結果、時長、延遲與插入結果都存在本機 SQLite
@@ -37,17 +38,35 @@ cmake -B build && cmake --build build -j --config Release
 
 `large-v3-turbo` 辨識中文效果較好；電腦較慢時可改用 `base` 或 `small`。
 
-### 2. 啟動 whisper.cpp 伺服器
+選用：下載 Silero VAD 模型，讓伺服器更準確地分辨人聲與背景噪音：
 
-使用期間請保持這個終端機視窗開著：
+```bash
+./models/download-vad-model.sh silero-v6.2.0
+```
+
+### 2. whisper.cpp 伺服器（由 app 自動管理）
+
+**不需要手動啟動。** 位址設為本機（預設 `http://localhost:8080`）時，app 啟動會在背景啟動 whisper-server，結束時關閉。
+
+| 項目 | 自動偵測位置 | 覆寫用環境變數 |
+|---|---|---|
+| 伺服器程式 | `~/whisper.cpp/build/bin/whisper-server`、`/opt/homebrew/bin/`、`/usr/local/bin/` | `WHISPER_SERVER_BIN` |
+| 模型 | `~/whisper.cpp/models/` 中依序找 large-v3-turbo、large-v3、medium、small、base | `WHISPER_MODEL_PATH` |
+| VAD 模型（選用） | `~/whisper.cpp/models/ggml-silero-*.bin`，找到時自動加上 `--vad` | `WHISPER_VAD_MODEL_PATH` |
+
+- 啟動參數包含 `-l auto`（自動偵測語言）與 `--host 127.0.0.1`（只接受本機連線）
+- large-v3-turbo 載入約需 7 秒；載入期間按鍵，app 會等待伺服器就緒後再辨識
+- 伺服器意外結束時會自動重啟；60 秒內連續當掉超過 3 次則停止，原因記在記錄檔
+- **位址上已有伺服器在執行時，app 會直接使用它，結束時也不會關閉它**
+
+也可以自己啟動伺服器，例如使用其他模型：
 
 ```bash
 cd ~/whisper.cpp
 ./build/bin/whisper-server -m models/ggml-large-v3-turbo.bin -l auto --host 127.0.0.1 --port 8080
 ```
 
-- `-l auto`：自動偵測語言。**不加的話伺服器預設以英文辨識**，中文會辨識錯誤
-- `--host 127.0.0.1`：只接受本機連線
+不加 `-l auto` 時，伺服器預設以英文辨識，中文會辨識錯誤。
 
 ### 3. 安裝依賴套件
 
@@ -91,11 +110,12 @@ pnpm start
 
 ## 使用方式
 
-1. 啟動 whisper.cpp 伺服器與本 app
+1. 啟動本 app（whisper.cpp 伺服器會自動啟動）
 2. 在任何 app 中，**按住右 Option 鍵**開始錄音
 3. 浮動視窗會顯示錄音狀態
 4. **放開按鍵**後，辨識完成的文字會插入到游標位置，浮動視窗 2 秒後自動隱藏
 5. 按住不到 200 毫秒會被視為誤觸，直接取消，不辨識也不插入
+6. 錄音中幾乎沒有聲音時（有聲片段累計不到 200 毫秒），不送出辨識也不插入，歷史記為 `empty`
 
 ## 轉寫歷史與設定
 
@@ -139,6 +159,7 @@ src/
 │   │   ├── history/        # 轉寫歷史
 │   │   ├── settings/       # app 設定
 │   │   ├── keyboard/       # 全域鍵盤監聽
+│   │   ├── whisper-server/ # 自動啟動與管理本機 whisper-server
 │   │   ├── permissions/    # macOS 權限
 │   │   ├── push-to-talk/   # Push-to-Talk 協調服務
 │   │   └── text-input/     # 文字插入
@@ -183,11 +204,17 @@ ad-hoc 簽章在每次重新打包後都會改變，macOS 可能會再次詢問�
 
 ### Q：出現「Cannot reach whisper.cpp server」？
 
-whisper.cpp 伺服器沒有在執行，或位址不正確。依照「啟動 whisper.cpp 伺服器」一節啟動後即可使用，不需要重新啟動 app。
+app 沒能啟動或連上 whisper.cpp 伺服器。請查看記錄檔 `~/Library/Logs/open-typeless/main.log` 中 `whisper-server` 開頭的訊息：
+
+- `whisper-server binary not found` 或 `no ggml model found`：依照「準備 whisper.cpp」編譯並下載模型，或用環境變數指定路徑
+- `exited before becoming ready` 或 `exceeded 3 unexpected exits`：伺服器啟動失敗，記錄檔會附上它最後的輸出
+- 位址不是本機時，app 不會自動啟動伺服器，請確認該伺服器正在執行
+
+也可以自己啟動伺服器（見上方指令），不需要重新啟動 app。
 
 ### Q：每次都插入「Thank you.」之類的文字？
 
-這是 whisper 收到靜音時產生的幻覺文字，通常代表沒有錄到聲音：
+這是 whisper 收到靜音時產生的幻覺文字。app 會先檢查音量，幾乎沒有聲音時不送出辨識；若仍經常出現，通常代表麥克風沒有錄到聲音：
 
 1. 確認 app 已取得麥克風權限（「系統設定」-「隱私權與安全性」-「麥克風」）
 2. 若打包版沒有出現在麥克風清單中，請重新執行 `pnpm package`，並確認簽章識別碼為 `com.electron.open-typeless`：`codesign -dv out/open-typeless-darwin-arm64/open-typeless.app`

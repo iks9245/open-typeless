@@ -224,9 +224,24 @@ During development, add Terminal to Input Monitoring.
 
 ## Common Issues
 
+### App Aborts (SIGABRT) on Start Without Accessibility
+
+`uIOhook.start()` does not throw when the macOS hook fails to start: on failure
+uiohook-napi destroys a still-locked mutex (`uv_mutex_destroy` in
+`uiohook_worker_start`) and the whole process aborts. Without Accessibility the
+hook always fails (`hook_run: Accessibility API is disabled!`); whether the
+abort happens is timing-dependent, so dev mode may only log the warning while
+the packaged app crashes.
+
+**Never call `start()` unless `systemPreferences.isTrustedAccessibilityClient(false)`
+is true.** `KeyboardService.register()` enforces this and returns `false`;
+`PushToTalkService` then shows guidance and re-checks on a timer and on
+`did-become-active`, starting the hook once access is granted (no restart).
+Don't retry `start()` after a failure while trusted — each attempt can abort.
+
 ### Events Not Firing
 
-1. Check Input Monitoring permission
+1. Check Accessibility / Input Monitoring permission
 2. Ensure `uIOhook.start()` was called
 3. Check you're listening to the correct event type
 

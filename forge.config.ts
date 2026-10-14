@@ -14,6 +14,8 @@ import { cp, mkdir } from 'fs/promises';
 const nativeModules = [
   'uiohook-napi',
   '@xitanggg/node-insert-text',
+  // Loads its own N-API prebuild from prebuilds/; no runtime dependencies.
+  'better-sqlite3',
   // Dependencies
   'node-gyp-build',
 ];
@@ -23,6 +25,8 @@ const config: ForgeConfig = {
     asar: {
       unpack: '*.{node,dll}',
     },
+    // Drizzle migration SQL, read at startup from process.resourcesPath/drizzle
+    extraResource: ['./drizzle'],
   },
   rebuildConfig: {
     force: true,

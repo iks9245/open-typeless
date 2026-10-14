@@ -8,6 +8,7 @@ export default defineConfig({
         // Native modules that should not be bundled
         'uiohook-napi',
         '@xitanggg/node-insert-text',
+        'better-sqlite3',
         // ws and its optional native dependencies
         'ws',
         'bufferutil',

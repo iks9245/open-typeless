@@ -58,6 +58,19 @@ export function run(scenario: () => Promise<void>): void {
 
 export const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Poll until a condition holds. Prefer this to fixed waits: CI machines can be several
+ * times slower than a laptop, and asynchronous work (history writes, transcription,
+ * insertion) must be awaited by its effect, not by elapsed time.
+ */
+export async function until(description: string, check: () => boolean, timeoutMs = 10000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(`Timed out after ${timeoutMs} ms waiting for ${description}`);
+    await wait(25);
+  }
+}
+
 /** One second of 220 Hz tone: clearly above the silence threshold. */
 export function toneChunk(ms = 1000, amplitude = 4000): ArrayBuffer {
   const samples = Math.round((ms * 16000) / 1000);

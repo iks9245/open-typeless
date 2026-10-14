@@ -7,6 +7,7 @@
 import { EventEmitter } from 'events';
 import log from 'electron-log';
 import { WhisperClient } from './lib/whisper-client';
+import type { SpeechLevel } from './lib/speech-level';
 import { loadWhisperConfig } from './lib/config';
 import { floatingWindow } from '../../windows';
 import { settingsService } from '../settings';
@@ -33,6 +34,10 @@ export interface ASRSessionOutcome {
   error: string | null;
   /** WAV sent to the engine, or null when no audio was submitted */
   wav: Buffer | null;
+  /** Speech level of the recording, or null when nothing was recorded */
+  speech: SpeechLevel | null;
+  /** Why transcription was not requested ('silence'), or null when it was */
+  skipped: 'silence' | null;
 }
 
 /**
@@ -235,7 +240,7 @@ export class ASRService extends EventEmitter {
    * Assemble the session outcome from the current client state.
    */
   private buildOutcome(result: ASRResult | null, startedAt: number): ASRSessionOutcome {
-    const audio = this.client?.submittedAudio ?? { pcmBytes: 0, wav: null };
+    const audio = this.client?.submittedAudio ?? { pcmBytes: 0, wav: null, speech: null, skipped: null };
     return {
       result,
       audioDurationMs: Math.round(audio.pcmBytes / PCM_BYTES_PER_MS),
@@ -243,6 +248,8 @@ export class ASRService extends EventEmitter {
       detectedLanguage: null,
       error: this.sessionError,
       wav: audio.wav,
+      speech: audio.speech,
+      skipped: audio.skipped,
     };
   }
 

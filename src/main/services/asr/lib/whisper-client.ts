@@ -11,8 +11,24 @@ import { EventEmitter } from 'events';
 import log from 'electron-log';
 import type { ASRResult, ASRStatus } from '../../../../shared/types/asr';
 import type { ConnectionState } from '../types';
+import { isSilent, measureSpeech, type SpeechLevel } from './speech-level';
 
 const logger = log.scope('whisper-client');
+
+/**
+ * Audio of the last finishAudio() call, kept until connect/disconnect for history.
+ */
+export interface SubmittedAudio {
+  pcmBytes: number;
+  /** Recorded audio as WAV (also kept when transcription was skipped); null when empty */
+  wav: Buffer | null;
+  /** Speech level, or null when no audio was recorded */
+  speech: SpeechLevel | null;
+  /** Why transcription was not requested, or null when it was */
+  skipped: 'silence' | null;
+}
+
+const EMPTY_SUBMISSION: SubmittedAudio = { pcmBytes: 0, wav: null, speech: null, skipped: null };
 
 export interface WhisperClientConfig {
   serverUrl: string;
@@ -66,8 +82,7 @@ export class WhisperClient extends EventEmitter {
   private connectionState: ConnectionState = 'disconnected';
   private audioChunks: Buffer[] = [];
   // Audio of the session being transcribed, kept until disconnect for history
-  private submittedPcmBytes = 0;
-  private submittedWav: Buffer | null = null;
+  private submitted: SubmittedAudio = EMPTY_SUBMISSION;
 
   constructor(config: WhisperClientConfig) {
     super();
@@ -83,17 +98,15 @@ export class WhisperClient extends EventEmitter {
   }
 
   /**
-   * Audio submitted by the last finishAudio() call: PCM byte count and the WAV sent
-   * to the server (null when nothing was submitted). Cleared on connect/disconnect.
+   * Audio of the last finishAudio() call. Cleared on connect/disconnect.
    */
-  get submittedAudio(): { pcmBytes: number; wav: Buffer | null } {
-    return { pcmBytes: this.submittedPcmBytes, wav: this.submittedWav };
+  get submittedAudio(): SubmittedAudio {
+    return this.submitted;
   }
 
   async connect(): Promise<void> {
     this.audioChunks = [];
-    this.submittedPcmBytes = 0;
-    this.submittedWav = null;
+    this.submitted = EMPTY_SUBMISSION;
     this.updateState('connecting');
     this.emitStatus('connecting');
 
@@ -128,8 +141,7 @@ export class WhisperClient extends EventEmitter {
 
   disconnect(): void {
     this.audioChunks = [];
-    this.submittedPcmBytes = 0;
-    this.submittedWav = null;
+    this.submitted = EMPTY_SUBMISSION;
     this.updateState('disconnected');
     this.emitStatus('idle');
   }
@@ -162,7 +174,6 @@ export class WhisperClient extends EventEmitter {
   private async transcribe(): Promise<void> {
     const pcmData = Buffer.concat(this.audioChunks);
     this.audioChunks = [];
-    this.submittedPcmBytes = pcmData.length;
 
     if (pcmData.length === 0) {
       logger.warn('No audio data to transcribe');
@@ -170,10 +181,28 @@ export class WhisperClient extends EventEmitter {
       return;
     }
 
-    logger.info('Sending audio to whisper.cpp', { bytes: pcmData.length });
-
     const wavData = buildWAV(pcmData);
-    this.submittedWav = wavData;
+    const speech = measureSpeech(pcmData);
+    const skipped = isSilent(speech) ? 'silence' : null;
+    this.submitted = { pcmBytes: pcmData.length, wav: wavData, speech, skipped };
+
+    // Logged for every session so the silence threshold can be calibrated
+    logger.info('Speech level', {
+      durationMs: Math.round(pcmData.length / 32),
+      voicedMs: speech.voicedMs,
+      peakDbfs: Math.round(speech.peakDbfs * 10) / 10,
+      rmsDbfs: Math.round(speech.rmsDbfs * 10) / 10,
+      skipped,
+    });
+
+    if (skipped) {
+      // whisper.cpp turns silence into phantom text such as "Thank you."
+      logger.info('No speech detected, skipping transcription');
+      this.emitStatus('done');
+      return;
+    }
+
+    logger.info('Sending audio to whisper.cpp', { bytes: pcmData.length });
     const formData = new FormData();
     formData.append('file', new Blob([wavData], { type: 'audio/wav' }), 'audio.wav');
     formData.append('response_format', 'json');

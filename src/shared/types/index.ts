@@ -9,3 +9,11 @@ export type {
   ASRStatus,
   AudioChunk,
 } from './asr';
+
+export type { AppSettings, AppSettingsPatch } from './settings';
+export type {
+  TranscriptionItem,
+  ListHistoryInput,
+  ListHistoryResult,
+  HistoryChange,
+} from './history';

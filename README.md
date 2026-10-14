@@ -177,11 +177,24 @@ pnpm start          # 啟動開發模式
 pnpm typecheck      # 型別檢查
 pnpm lint           # 程式碼檢查
 pnpm db:generate    # 修改 src/main/db/schema.ts 後產生 migration
+pnpm test           # 單元測試（純 Node）
+pnpm test:integration  # 整合測試（在真正的 Electron 主程序中執行）
 pnpm package        # 打包
+pnpm verify:package # 檢查打包結果（migration、原生模組、簽章）
 pnpm make           # 建置安裝檔
 ```
 
 資料庫慣例請見 `.trellis/spec/backend/database-guidelines.md`。
+
+### 測試
+
+| 類型 | 位置 | 說明 |
+|---|---|---|
+| 單元測試 | `tests/unit/` | Vitest；資料庫用記憶體 SQLite，檔案用暫存目錄。whisper-server 生命週期測試會啟動 `tests/fixtures/fake-whisper-server.mjs`，需要本機埠號與 `ps` |
+| 整合測試 | `tests/integration/` | 由 `scripts/run-integration-tests.mjs` 用 esbuild 打包後交給 Electron 執行；`userData` 指向暫存目錄、文字插入被替換，不會碰到真實資料，也不會打字到其他 app |
+| 打包檢查 | `scripts/verify-package.mjs` | 檢查只有打包後才會出現的問題 |
+
+每個 PR 與推送到 `main` 時，GitHub Actions 會在 macOS 上依序執行：型別檢查、lint、單元測試、整合測試、打包、打包檢查（`.github/workflows/ci.yml`）。
 
 ### 打包與簽章
 

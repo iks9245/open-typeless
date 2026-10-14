@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSilent, measureSpeech } from '../../src/main/services/asr/lib/speech-level';
+import { isSilent, measureSpeech, MIN_VOICED_MS, VOICED_FRAME_DBFS } from '../../src/main/services/asr/lib/speech-level';
 
 const SAMPLE_RATE = 16000;
 
@@ -36,17 +36,24 @@ describe('speech level', () => {
     expect(isSilent(level)).toBe(true);
   });
 
-  it('treats steady uniform noise within ±300 below the frame threshold as silent', () => {
-    const level = measureSpeech(noise(300));
-    expect(level.rmsDbfs).toBeLessThan(-45);
-    expect(level.rmsDbfs).toBeGreaterThan(-46);
+  it('treats steady uniform noise just below the frame threshold as silent', () => {
+    const level = measureSpeech(noise(150));
+    expect(level.rmsDbfs).toBeLessThan(VOICED_FRAME_DBFS);
+    expect(level.rmsDbfs).toBeGreaterThan(VOICED_FRAME_DBFS - 2);
     expect(level.voicedMs).toBe(0);
     expect(isSilent(level)).toBe(true);
   });
 
-  it('ignores a 150 ms tone surrounded by silence in a two-second recording', () => {
-    const level = measureSpeech(pcm(2000, (i) => i >= 8000 && i < 10400 ? sine(i) : 0));
-    expect(level.voicedMs).toBe(160);
+  it('lets louder steady noise (uniform ±300) through, erring toward transcription', () => {
+    // The uncalibrated threshold prefers sending noise to whisper over dropping quiet speech
+    const level = measureSpeech(noise(300));
+    expect(level.rmsDbfs).toBeGreaterThan(VOICED_FRAME_DBFS);
+    expect(isSilent(level)).toBe(false);
+  });
+
+  it('ignores a 60 ms tone surrounded by silence in a two-second recording', () => {
+    const level = measureSpeech(pcm(2000, (i) => i >= 8000 && i < 8960 ? sine(i) : 0));
+    expect(level.voicedMs).toBe(60);
     expect(isSilent(level)).toBe(true);
   });
 
@@ -62,8 +69,9 @@ describe('speech level', () => {
     expect(isSilent(level)).toBe(false);
   });
 
-  it('accepts exactly 200 ms of voiced audio', () => {
-    expect(isSilent(measureSpeech(pcm(200, (i) => sine(i))))).toBe(false);
+  it('accepts exactly MIN_VOICED_MS of voiced audio and rejects one frame less', () => {
+    expect(isSilent(measureSpeech(pcm(MIN_VOICED_MS, (i) => sine(i))))).toBe(false);
+    expect(isSilent(measureSpeech(pcm(MIN_VOICED_MS - 20, (i) => sine(i))))).toBe(true);
   });
 
   it('reports an empty buffer as silence at the -120 dBFS floor', () => {

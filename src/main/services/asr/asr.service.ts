@@ -6,12 +6,34 @@
 
 import { EventEmitter } from 'events';
 import log from 'electron-log';
-import { VolcengineClient } from './lib/volcengine-client';
-import { loadASRConfig, ConfigurationError } from './lib/config';
+import { WhisperClient } from './lib/whisper-client';
+import { loadWhisperConfig } from './lib/config';
 import { floatingWindow } from '../../windows';
+import { settingsService } from '../settings';
 import type { ASRConfig, ASRResult, ASRStatus } from '../../../shared/types/asr';
 
 const logger = log.scope('asr-service');
+
+/** PCM bytes per millisecond for 16-bit, 16 kHz, mono audio. */
+const PCM_BYTES_PER_MS = (16000 * 2) / 1000;
+
+/**
+ * Everything a stopped session produced, for callers that record history.
+ */
+export interface ASRSessionOutcome {
+  /** Final (or last interim) result, or null if none arrived */
+  result: ASRResult | null;
+  /** Duration of the audio submitted for transcription */
+  audioDurationMs: number;
+  /** Time from stop request to result (or timeout) */
+  latencyMs: number;
+  /** Language reported by the engine; whisper.cpp JSON responses do not include it */
+  detectedLanguage: string | null;
+  /** Last client error during this session, if any */
+  error: string | null;
+  /** WAV sent to the engine, or null when no audio was submitted */
+  wav: Buffer | null;
+}
 
 /**
  * Event types emitted by ASRService.
@@ -57,10 +79,11 @@ export interface ASRService {
  * ```
  */
 export class ASRService extends EventEmitter {
-  private client: VolcengineClient | null = null;
+  private client: WhisperClient | null = null;
   private status: ASRStatus = 'idle';
   private finalResult: ASRResult | null = null;
   private lastResult: ASRResult | null = null;
+  private sessionError: string | null = null;
 
   /**
    * Get current ASR status.
@@ -85,30 +108,17 @@ export class ASRService extends EventEmitter {
     logger.info('Starting ASR session');
     this.reset();
 
-    // Load configuration from environment
-    let envConfig;
-    try {
-      envConfig = loadASRConfig();
-    } catch (error) {
-      if (error instanceof ConfigurationError) {
-        logger.error('ASR configuration error', { message: error.message });
-        this.updateStatus('error');
-        this.emit('error', error);
-        floatingWindow.sendError(error.message);
-        throw error;
-      }
-      throw error;
+    // Load whisper.cpp config: settings (which default to env vars), then runtime overrides
+    const whisperConfig = loadWhisperConfig();
+    const settings = settingsService.get();
+    if (settings.success) {
+      whisperConfig.serverUrl = settings.data.asr.whisperServerUrl;
+      whisperConfig.language = settings.data.asr.language ?? undefined;
     }
+    if (config?.serverUrl) whisperConfig.serverUrl = config.serverUrl;
+    if (config?.language) whisperConfig.language = config.language;
 
-    // Merge with optional runtime config
-    const clientConfig = {
-      appId: config?.appId ?? envConfig.appId,
-      accessToken: config?.accessToken ?? envConfig.accessToken,
-      resourceId: config?.resourceId ?? envConfig.resourceId,
-    };
-
-    // Create Volcengine client
-    this.client = new VolcengineClient(clientConfig);
+    this.client = new WhisperClient(whisperConfig);
 
     // Setup event forwarding
     this.setupClientListeners();
@@ -116,13 +126,13 @@ export class ASRService extends EventEmitter {
     // Show floating window and update status
     this.updateStatus('connecting');
 
-    // Connect to Volcengine service
+    // Verify whisper.cpp server is reachable
     try {
       await this.client.connect();
       logger.info('ASR session started successfully');
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      logger.error('Failed to connect to ASR service', { error: err.message });
+      logger.error('Failed to connect to whisper.cpp server', { error: err.message });
       this.updateStatus('error');
       this.emit('error', err);
       floatingWindow.sendError(`Connection failed: ${err.message}`);
@@ -137,9 +147,20 @@ export class ASRService extends EventEmitter {
    * @returns The final ASR result, or null if no result was received
    */
   async stop(): Promise<ASRResult | null> {
+    return (await this.stopWithOutcome()).result;
+  }
+
+  /**
+   * Stop ASR session and report what it produced.
+   *
+   * @returns The result together with audio duration, latency, error and submitted WAV
+   */
+  async stopWithOutcome(): Promise<ASRSessionOutcome> {
+    const startedAt = Date.now();
+
     if (!this.client || this.status === 'idle') {
       logger.warn('No active ASR session to stop');
-      return null;
+      return this.buildOutcome(null, startedAt);
     }
 
     logger.info('Stopping ASR session');
@@ -150,12 +171,15 @@ export class ASRService extends EventEmitter {
 
       // Wait for final result with timeout
       const result = await this.waitForFinalResult();
+      // Read submitted audio before cleanup() disconnects the client and clears it
+      const outcome = this.buildOutcome(result, startedAt);
       this.cleanup();
-      return result;
+      return outcome;
     }
 
+    const outcome = this.buildOutcome(this.finalResult, startedAt);
     this.cleanup();
-    return this.finalResult;
+    return outcome;
   }
 
   /**
@@ -188,7 +212,23 @@ export class ASRService extends EventEmitter {
   private reset(): void {
     this.finalResult = null;
     this.lastResult = null;
+    this.sessionError = null;
     this.status = 'idle';
+  }
+
+  /**
+   * Assemble the session outcome from the current client state.
+   */
+  private buildOutcome(result: ASRResult | null, startedAt: number): ASRSessionOutcome {
+    const audio = this.client?.submittedAudio ?? { pcmBytes: 0, wav: null };
+    return {
+      result,
+      audioDurationMs: Math.round(audio.pcmBytes / PCM_BYTES_PER_MS),
+      latencyMs: Date.now() - startedAt,
+      detectedLanguage: null,
+      error: this.sessionError,
+      wav: audio.wav,
+    };
   }
 
   /**
@@ -223,7 +263,8 @@ export class ASRService extends EventEmitter {
     });
 
     this.client.on('error', (error) => {
-      logger.error('Volcengine client error', { message: error.message });
+      logger.error('Whisper client error', { message: error.message });
+      this.sessionError = error.message;
       this.updateStatus('error');
       this.emit('error', error);
       floatingWindow.sendError(error.message);
@@ -231,7 +272,8 @@ export class ASRService extends EventEmitter {
   }
 
   /**
-   * Wait for final result with timeout.
+   * Wait for the final result, a client error, or a timeout.
+   * Resolves with the final (or last interim) result; null when none arrived.
    */
   private waitForFinalResult(): Promise<ASRResult | null> {
     return new Promise((resolve) => {
@@ -242,46 +284,51 @@ export class ASRService extends EventEmitter {
       }
 
       const TIMEOUT_MS = 10000; // 10 seconds timeout
+      const client = this.client;
       let resolved = false;
+      let doneTimeoutId: NodeJS.Timeout | null = null;
+
+      const finish = (result: ASRResult | null): void => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
+        if (doneTimeoutId) clearTimeout(doneTimeoutId);
+        client?.off('result', resultHandler);
+        client?.off('status', statusHandler);
+        client?.off('error', errorHandler);
+        resolve(result);
+      };
 
       const resultHandler = (result: ASRResult): void => {
-        if (result.isFinal && !resolved) {
-          resolved = true;
-          this.client?.off('result', resultHandler);
-          clearTimeout(timeoutId);
-          resolve(result);
+        if (result.isFinal) {
+          finish(result);
         }
+      };
+
+      const statusHandler = (status: ASRStatus): void => {
+        if (status === 'done' && !doneTimeoutId) {
+          // Give a small delay for the final result to come through
+          doneTimeoutId = setTimeout(() => finish(this.finalResult ?? this.lastResult), 500);
+        } else if (status === 'error') {
+          finish(this.finalResult ?? this.lastResult);
+        }
+      };
+
+      // Transcription failed: no final result will follow, so stop waiting.
+      // sessionError is captured by the listener registered in setupClientListeners().
+      const errorHandler = (): void => {
+        finish(this.finalResult ?? this.lastResult);
       };
 
       const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          this.client?.off('result', resultHandler);
-          logger.warn('Timeout waiting for final result, returning last result');
-          // Return last result or final result, whichever is available
-          resolve(this.finalResult ?? this.lastResult);
-        }
+        logger.warn('Timeout waiting for final result, returning last result');
+        // Return last result or final result, whichever is available
+        finish(this.finalResult ?? this.lastResult);
       }, TIMEOUT_MS);
 
-      this.client?.on('result', resultHandler);
-
-      // Also listen for done status as backup
-      const statusHandler = (status: ASRStatus): void => {
-        if (status === 'done' && !resolved) {
-          // Give a small delay for the final result to come through
-          setTimeout(() => {
-            if (!resolved) {
-              resolved = true;
-              this.client?.off('result', resultHandler);
-              this.client?.off('status', statusHandler);
-              clearTimeout(timeoutId);
-              resolve(this.finalResult ?? this.lastResult);
-            }
-          }, 500);
-        }
-      };
-
-      this.client?.on('status', statusHandler);
+      client?.on('result', resultHandler);
+      client?.on('status', statusHandler);
+      client?.on('error', errorHandler);
     });
   }
 
@@ -295,7 +342,14 @@ export class ASRService extends EventEmitter {
       this.client = null;
     }
 
-    this.updateStatus('idle');
+    if (this.status === 'error') {
+      // Leave the error on screen; the floating window auto-hides it after sendError()
+      this.status = 'idle';
+      this.emit('status', 'idle');
+      logger.debug('Status updated', { status: 'idle' });
+    } else {
+      this.updateStatus('idle');
+    }
     logger.info('ASR session cleaned up');
   }
 }

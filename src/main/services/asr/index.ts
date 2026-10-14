@@ -5,7 +5,7 @@
 
 // Service
 export { ASRService, asrService } from './asr.service';
-export type { ASRServiceEvents } from './asr.service';
+export type { ASRServiceEvents, ASRSessionOutcome } from './asr.service';
 
 // Procedures
 export { startASR, stopASR, getASRStatus } from './procedures';

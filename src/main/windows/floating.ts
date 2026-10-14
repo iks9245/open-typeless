@@ -111,7 +111,7 @@ export class FloatingWindowManager {
       const allowedOrigins = [
         FLOATING_WINDOW_VITE_DEV_SERVER_URL,
         'file://',
-      ].filter(Boolean);
+      ].filter((origin): origin is string => Boolean(origin));
       const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
       if (!isAllowed) {
         event.preventDefault();

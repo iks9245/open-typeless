@@ -4,6 +4,9 @@
  */
 
 import type { ASRConfig, ASRResult, ASRStatus } from '../shared/types/asr';
+import type { IpcResult } from '../shared/types/common';
+import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from '../shared/types/history';
+import type { AppSettings, AppSettingsPatch } from '../shared/types/settings';
 
 /**
  * ASR API interface exposed via contextBridge.
@@ -70,11 +73,71 @@ interface FloatingWindowApi {
 }
 
 /**
+ * History API interface exposed via contextBridge.
+ */
+interface HistoryApi {
+  /**
+   * List transcription history.
+   * @param input - Optional pagination and filters
+   */
+  list: (input?: ListHistoryInput) => Promise<IpcResult<ListHistoryResult>>;
+
+  /**
+   * Get a transcription by ID.
+   * @param id - Transcription ID
+   */
+  get: (id: string) => Promise<IpcResult<TranscriptionItem | null>>;
+
+  /**
+   * Delete a transcription and its saved audio.
+   * @param id - Transcription ID
+   */
+  delete: (id: string) => Promise<IpcResult<{ deleted: boolean }>>;
+
+  /**
+   * Clear transcription history and saved audio.
+   */
+  clear: () => Promise<IpcResult<{ deleted: number }>>;
+
+  /**
+   * Subscribe to history changes.
+   * @param callback - Called when history changes
+   * @returns Unsubscribe function
+   */
+  onChanged: (callback: (change: HistoryChange) => void) => () => void;
+}
+
+/**
+ * Settings API interface exposed via contextBridge.
+ */
+interface SettingsApi {
+  /**
+   * Get application settings, including defaults.
+   */
+  get: () => Promise<IpcResult<AppSettings>>;
+
+  /**
+   * Update application settings.
+   * @param patch - Partial settings to update
+   */
+  update: (patch: AppSettingsPatch) => Promise<IpcResult<AppSettings>>;
+
+  /**
+   * Subscribe to settings changes.
+   * @param callback - Called with the complete updated settings
+   * @returns Unsubscribe function
+   */
+  onChanged: (callback: (settings: AppSettings) => void) => () => void;
+}
+
+/**
  * Application API exposed to the renderer process.
  */
 interface AppApi {
   asr: ASRApi;
   floatingWindow: FloatingWindowApi;
+  history: HistoryApi;
+  settings: SettingsApi;
 }
 
 declare global {

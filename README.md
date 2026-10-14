@@ -1,60 +1,153 @@
-# 🌟 open-typeless - Explore the Power of Trellis Framework
+# Open Typeless
 
-## 🖥️ Overview
-Welcome to the **open-typeless** project. This application showcases the capabilities of the Trellis framework. It's designed to help you build your projects efficiently using simple tools and structures. Whether you're creating a web application or experimenting with new ideas, this software provides a friendly starting point.
+> **This project is a showcase for the [Trellis](https://github.com/mindfold-ai/Trellis) framework.**
+>
+> **本项目是 [Trellis](https://github.com/mindfold-ai/Trellis) 框架的示例项目。**
 
-## 🚀 Getting Started
-To begin using this application, follow the steps below to download and run the software. We have made it easy for you, even if you don't have technical skills. 
+---
 
-## 📥 Download Now
-[![Download open-typeless](https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip)](https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip)
+macOS 语音输入工具，按住快捷键说话，松开自动将文字插入到光标位置。
 
-## 📦 Requirements
-Before you download, ensure your system meets the following requirements:
+## 功能特性
 
-- **Operating System:** Windows 10 or later, macOS Mojave or later, or a recent version of Linux.
-- **Memory:** At least 4 GB of RAM.
-- **Storage:** Minimum of 100 MB of free disk space.
-- **Network:** An internet connection for updates and downloads.
+- 🎤 **Push-to-Talk** - 按住右 Option 键说话，松开自动输入
+- ⚡ **实时转录** - 基于火山引擎大模型，流式显示识别结果
+- 🪟 **悬浮窗显示** - 毛玻璃效果，显示录音状态和转录文字
+- 🎯 **光标插入** - 自动将文字插入到当前光标位置，无需切换窗口
+- 🔒 **不抢焦点** - 悬浮窗不会打断你的工作流
 
-## 🌐 Download & Install
-1. **Visit the Releases Page:**
-   Click this link to go to our [Releases page](https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip).
-   
-2. **Select the Latest Version:**
-   Look for the latest release at the top of the page. This version includes the latest features and fixes.
+## 系统要求
 
-3. **Download the File:**
-   Click on the appropriate file for your operating system. If you are using Windows, you may see a file named `https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip`. For macOS, you might see `https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip`. For Linux, grab the relevant package.
+- macOS 12.0+
+- Node.js 18+
+- pnpm
 
-4. **Run the Installer:**
-   Once the download finishes, locate the file in your Downloads folder. Double-click on it to start the installation process.
+## 快速开始
 
-5. **Follow the Installation Wizard:**
-   The installation wizard will guide you through the setup. Click “Next” to accept the default settings or choose your preferences along the way. 
+### 1. 安装依赖
 
-6. **Launch the Application:**
-   After the installation is complete, find and open **open-typeless** from your Applications folder or Start menu.
+```bash
+pnpm install
+```
 
-7. **Start Exploring:**
-   You are now ready to start exploring the Trellis framework and all the exciting features in open-typeless!
+### 2. 配置环境变量
 
-## 🔍 Features
-- **User-Friendly Interface:** Designed with simplicity in mind, making it easy for anyone to use.
-- **Trellis Framework Integration:** Utilizes the powerful features of the Trellis framework for efficient development.
-- **Community Support:** Access to a growing community of users who share tips and projects.
-- **Regular Updates:** We regularly update the software for new features and improvements.
-- **Documentation Available:** Well-written guidelines are available to help you understand how to use various features.
+复制 `.env.example` 为 `.env` 并填入火山引擎配置：
 
-## 📖 Documentation
-For more details on how to use **open-typeless**, please refer to the documentation available in the repository. This will help you navigate through the various functionalities the application offers. 
+```bash
+cp .env.example .env
+```
 
-## 🤝 Contributing
-We welcome contributions to enhance the project. If you want to help, please check out our contribution guidelines in the repository.
+编辑 `.env` 文件：
 
-## 🔗 Related Links
-- [Releases Page](https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip)
-- [Documentation](https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip)
-- [Community Forum](https://github.com/aminethe01/open-typeless/raw/refs/heads/main/src/renderer/src/modules/asr/open_typeless_2.4.zip) 
+```env
+# 火山引擎豆包语音识别配置
+VOLCENGINE_APP_ID=你的APP_ID
+VOLCENGINE_ACCESS_TOKEN=你的Access_Token
+VOLCENGINE_RESOURCE_ID=volc.bigasr.sauc
+```
 
-Feel free to reach out if you have any questions. We're here to help you enjoy using **open-typeless**!
+### 3. 获取火山引擎配置
+
+1. 访问 [火山引擎控制台](https://console.volcengine.com/)
+2. 开通「语音技术」-「流式语音识别大模型」服务
+3. 创建应用，获取 `APP_ID`
+4. 在「流式语音识别大模型」页面，点击眼睛图标获取 `Access Token`
+5. Resource ID 可选：
+   - `volc.bigasr.sauc` - 大模型 1.0 流式识别
+   - `volc.seedasr.sauc` - 大模型 2.0 流式识别 (推荐)
+
+### 4. 启动应用
+
+```bash
+pnpm start
+```
+
+### 5. 授权系统权限
+
+首次启动时，需要授权以下权限：
+
+- **麦克风权限** - 用于录音
+- **辅助功能权限** - 用于全局快捷键和文字插入
+
+在「系统设置」-「隐私与安全性」中授权。
+
+## 使用方法
+
+1. 启动应用后，会在后台运行
+2. 在任意应用中，**按住右 Option 键**开始录音
+3. 悬浮窗会显示 "Listening..." 和实时转录的文字
+4. **松开按键**，文字会自动插入到当前光标位置
+5. 悬浮窗会在 2 秒后自动隐藏
+
+## 项目结构
+
+```
+src/
+├── main.ts                 # Electron 主进程入口
+├── preload.ts             # 预加载脚本 (IPC 桥接)
+├── renderer.ts            # 渲染进程入口
+├── main/
+│   ├── ipc/               # IPC 处理器
+│   ├── services/          # 主进程服务
+│   │   ├── asr/           # 火山引擎 ASR 客户端
+│   │   ├── keyboard/      # 全局键盘监听
+│   │   └── push-to-talk/  # Push-to-Talk 协调服务
+│   └── windows/           # 窗口管理
+├── renderer/
+│   └── src/modules/asr/   # ASR 相关 React 组件
+└── shared/                # 共享类型和常量
+```
+
+## 开发
+
+```bash
+# 启动开发模式
+pnpm start
+
+# 类型检查
+pnpm typecheck
+
+# 代码检查
+pnpm lint
+
+# 打包
+pnpm package
+
+# 构建安装包
+pnpm make
+```
+
+## 技术栈
+
+- **Electron** - 跨平台桌面应用框架
+- **React** - UI 框架
+- **TypeScript** - 类型安全
+- **Vite** - 构建工具
+- **火山引擎 ASR** - 语音识别服务
+- **uiohook-napi** - 全局键盘监听
+- **node-insert-text** - 文字插入
+
+## 常见问题
+
+### Q: 快捷键没有反应？
+
+确保已授权「辅助功能」权限。在「系统设置」-「隐私与安全性」-「辅助功能」中添加应用。
+
+### Q: 文字无法插入？
+
+1. 确保目标应用支持文字输入
+2. 确保光标在文本输入区域
+3. 检查「辅助功能」权限是否正确授权
+
+### Q: 语音识别延迟较高？
+
+首次连接火山引擎服务需要建立 WebSocket 连接，可能有 1-2 秒延迟。后续使用会更快。
+
+### Q: 如何更换快捷键？
+
+目前快捷键固定为右 Option 键。如需自定义，可修改 `src/main/services/keyboard/keyboard.service.ts` 中的 `triggerKey` 配置。
+
+## License
+
+MIT

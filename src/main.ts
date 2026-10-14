@@ -2,9 +2,14 @@ import 'dotenv/config';
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import log from 'electron-log';
 import { setupAllIpcHandlers } from './main/ipc';
 import { floatingWindow } from './main/windows';
 import { pushToTalkService } from './main/services';
+import { closeDatabase, initDatabase } from './main/db';
+import { historyService } from './main/services/history';
+
+const logger = log.scope('main');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -41,7 +46,7 @@ const createWindow = () => {
     const allowedOrigins = [
       MAIN_WINDOW_VITE_DEV_SERVER_URL,
       'file://',
-    ].filter(Boolean);
+    ].filter((origin): origin is string => Boolean(origin));
     const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
     if (!isAllowed) {
       event.preventDefault();
@@ -62,10 +67,37 @@ const createWindow = () => {
   pushToTalkService.initialize();
 };
 
+/**
+ * Open local storage and maintain history once per launch.
+ * Failure only disables history/settings persistence; dictation keeps working.
+ */
+const initStorage = (): void => {
+  if (!initDatabase()) {
+    return;
+  }
+
+  // Sessions cut off by a crash or forced quit become failed/interrupted
+  const recovered = historyService.recover();
+  if (recovered > 0) {
+    logger.info('Recovered interrupted history sessions', { count: recovered });
+  }
+
+  // Apply the retention setting; runs in the background and never throws
+  void historyService.prune().then((pruned) => {
+    if (pruned > 0) {
+      logger.info('Pruned history beyond retention', { count: pruned });
+    }
+  });
+};
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+// Storage is initialized once here, not in createWindow (which also runs on 'activate').
+app.on('ready', () => {
+  initStorage();
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -80,6 +112,8 @@ app.on('window-all-closed', () => {
 function cleanup(): void {
   pushToTalkService.dispose();
   floatingWindow.destroy();
+  // Idempotent; an unfinished session is marked interrupted on next launch
+  closeDatabase();
 }
 
 // Clean up before quitting

@@ -26,4 +26,24 @@ export const IPC_CHANNELS = {
     /** Set content height for adaptive window sizing (Renderer -> Main) */
     SET_CONTENT_HEIGHT: 'floating-window:set-content-height',
   },
+  HISTORY: {
+    /** List transcription history (Renderer -> Main) */
+    LIST: 'history:list',
+    /** Get a transcription (Renderer -> Main) */
+    GET: 'history:get',
+    /** Delete a transcription (Renderer -> Main) */
+    DELETE: 'history:delete',
+    /** Clear transcription history (Renderer -> Main) */
+    CLEAR: 'history:clear',
+    /** History change (Main -> Renderer) */
+    CHANGED: 'history:changed',
+  },
+  SETTINGS: {
+    /** Get application settings (Renderer -> Main) */
+    GET: 'settings:get',
+    /** Update application settings (Renderer -> Main) */
+    UPDATE: 'settings:update',
+    /** Settings change (Main -> Renderer) */
+    CHANGED: 'settings:changed',
+  },
 } as const;

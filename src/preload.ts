@@ -9,6 +9,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from './shared/constants/channels';
 import type { ASRConfig, ASRResult, ASRStatus } from './shared/types/asr';
+import type { IpcResult } from './shared/types/common';
+import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from './shared/types/history';
+import type { AppSettings, AppSettingsPatch } from './shared/types/settings';
 
 /**
  * ASR API exposed to the renderer process.
@@ -106,8 +109,90 @@ const floatingWindowApi = {
   },
 };
 
+/**
+ * History API exposed to the renderer process.
+ */
+const historyApi = {
+  /**
+   * List transcription history.
+   * @param input - Optional pagination and filters
+   */
+  list: (input?: ListHistoryInput): Promise<IpcResult<ListHistoryResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HISTORY.LIST, input),
+
+  /**
+   * Get a transcription by ID.
+   * @param id - Transcription ID
+   */
+  get: (id: string): Promise<IpcResult<TranscriptionItem | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HISTORY.GET, { id }),
+
+  /**
+   * Delete a transcription and its saved audio.
+   * @param id - Transcription ID
+   */
+  delete: (id: string): Promise<IpcResult<{ deleted: boolean }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HISTORY.DELETE, { id }),
+
+  /**
+   * Clear transcription history and saved audio.
+   */
+  clear: (): Promise<IpcResult<{ deleted: number }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HISTORY.CLEAR, {}),
+
+  /**
+   * Subscribe to history changes.
+   * @param callback - Called when history changes
+   * @returns Unsubscribe function
+   */
+  onChanged: (callback: (change: HistoryChange) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, change: HistoryChange): void => {
+      callback(change);
+    };
+    ipcRenderer.on(IPC_CHANNELS.HISTORY.CHANGED, handler);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.HISTORY.CHANGED, handler);
+    };
+  },
+};
+
+/**
+ * Settings API exposed to the renderer process.
+ */
+const settingsApi = {
+  /**
+   * Get application settings, including defaults.
+   */
+  get: (): Promise<IpcResult<AppSettings>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.GET, {}),
+
+  /**
+   * Update application settings.
+   * @param patch - Partial settings to update
+   */
+  update: (patch: AppSettingsPatch): Promise<IpcResult<AppSettings>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.SETTINGS.UPDATE, patch),
+
+  /**
+   * Subscribe to settings changes.
+   * @param callback - Called with the complete updated settings
+   * @returns Unsubscribe function
+   */
+  onChanged: (callback: (settings: AppSettings) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, settings: AppSettings): void => {
+      callback(settings);
+    };
+    ipcRenderer.on(IPC_CHANNELS.SETTINGS.CHANGED, handler);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.SETTINGS.CHANGED, handler);
+    };
+  },
+};
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('api', {
   asr: asrApi,
   floatingWindow: floatingWindowApi,
+  history: historyApi,
+  settings: settingsApi,
 });

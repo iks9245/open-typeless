@@ -11,4 +11,5 @@ export {
   isASRConfigured,
   ConfigurationError,
 } from './config';
-export type { ASREnvConfig } from './config';
+// Keep the old name so existing re-exports compile without change
+export type { VolcengineEnvConfig as ASREnvConfig } from './config';

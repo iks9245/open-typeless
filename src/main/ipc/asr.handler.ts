@@ -25,7 +25,7 @@ function getAllWindows(): BrowserWindow[] {
 /**
  * Send an event to all windows.
  */
-function broadcastToAllWindows(channel: string, ...args: unknown[]): void {
+export function broadcastToAllWindows(channel: string, ...args: unknown[]): void {
   const windows = getAllWindows();
   for (const win of windows) {
     win.webContents.send(channel, ...args);

@@ -8,7 +8,11 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import path from 'path';
-import { cp, mkdir } from 'fs/promises';
+import { cp, mkdir, readdir } from 'fs/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // Native modules that need special handling for packaging
 const nativeModules = [
@@ -59,6 +63,23 @@ const config: ForgeConfig = {
           }
         }),
       );
+    },
+    // Without a signing identity, re-sign the finished macOS bundle ad-hoc so its
+    // code signature identifier matches CFBundleIdentifier. The fuses plugin signs
+    // earlier, while the bundle is still Electron.app (com.github.Electron), and
+    // macOS privacy (TCC) then never prompts for or lists the renamed app's
+    // microphone access, so recordings are silent.
+    postPackage: async (forgeConfig, { platform, outputPaths }) => {
+      if (platform !== 'darwin' || forgeConfig.packagerConfig.osxSign) {
+        return;
+      }
+
+      for (const outputPath of outputPaths) {
+        const bundles = (await readdir(outputPath)).filter((entry) => entry.endsWith('.app'));
+        for (const bundle of bundles) {
+          await execFileAsync('codesign', ['--force', '--deep', '--sign', '-', path.join(outputPath, bundle)]);
+        }
+      }
     },
   },
   makers: [

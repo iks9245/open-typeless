@@ -3,7 +3,6 @@
  * Handles automatic audio recording when ASR status changes.
  */
 
-import './index.css';
 import { AudioRecorder } from './renderer/src/modules/asr';
 
 console.log(
@@ -85,3 +84,16 @@ window.addEventListener('beforeunload', () => {
 });
 
 console.log('[Renderer] Auto-recording initialized, waiting for ASR status...');
+
+// Load the UI only after recording is initialized. Import/mount failures and
+// React rendering errors must never prevent the independent ASR listener above.
+void (async () => {
+  try {
+    const { mountMainWindow } = await import('./renderer/src/modules/main-window');
+    mountMainWindow();
+  } catch (error) {
+    console.error('[Renderer] Failed to mount main window UI:', error);
+    const root = document.getElementById('root');
+    if (root) root.textContent = '介面無法載入，請重新開啟主視窗。';
+  }
+})();

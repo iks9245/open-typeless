@@ -34,10 +34,37 @@ if (files.length === 0) {
 
 mkdirSync(outDir, { recursive: true });
 
+// UI tests load the real main window, so build its renderer and preload first
+const uiEnv = {};
+if (files.some((name) => name.startsWith('main-window'))) {
+  const { build: viteBuild } = await import('vite');
+  const rendererDir = path.join(outDir, 'renderer');
+  await viteBuild({
+    configFile: path.join(root, 'vite.renderer.config.ts'),
+    root,
+    // Relative asset URLs, as the packaged app loads index.html from file://
+    base: './',
+    logLevel: 'warn',
+    build: { outDir: rendererDir, emptyOutDir: true },
+  });
+  const preload = path.join(outDir, 'preload.js');
+  await build({
+    entryPoints: [path.join(root, 'src', 'preload.ts')],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile: preload,
+    external: ['electron'],
+    logLevel: 'warning',
+  });
+  uiEnv.INTEGRATION_RENDERER_HTML = path.join(rendererDir, 'index.html');
+  uiEnv.INTEGRATION_PRELOAD = preload;
+}
+
 const run = (bundle, tmp) => new Promise((resolve) => {
   const child = spawn(electron, [bundle], {
     cwd: root,
-    env: { ...process.env, INTEGRATION_TMP: tmp, ELECTRON_ENABLE_LOGGING: '0' },
+    env: { ...process.env, ...uiEnv, INTEGRATION_TMP: tmp, ELECTRON_ENABLE_LOGGING: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';

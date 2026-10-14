@@ -11,6 +11,7 @@ export type {
 } from './asr';
 
 export type { AppSettings, AppSettingsPatch } from './settings';
+export type { IpcResult } from './common';
 export type {
   TranscriptionItem,
   ListHistoryInput,

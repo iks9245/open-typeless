@@ -7,7 +7,7 @@ import path from 'node:path';
 import { clipboard, nativeTheme } from 'electron';
 import { count } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { assert, run, test, wait } from './harness';
+import { assert, run, test, until } from './harness';
 import { openMainWindow } from './ui';
 
 run(async () => {
@@ -91,8 +91,7 @@ run(async () => {
       item.querySelector('[data-testid="history-copy"]').click();
       return item.querySelector('[data-testid="history-text"]').textContent.trim();
     })()`);
-    const deadline = Date.now() + 2000;
-    while (clipboard.readText() !== first && Date.now() < deadline) await wait(50);
+    await until('the clipboard to hold the text', () => clipboard.readText() === first, 3000).catch(() => undefined);
     assert(clipboard.readText() === first, 'clipboard matches', { clipboard: clipboard.readText(), first, status: await ui.text('save-status') });
     ui.window.hide();
   });
@@ -102,8 +101,7 @@ run(async () => {
     await ui.click('history-delete');
     assert(rowCount() === before, 'nothing deleted before confirming');
     await ui.click('history-delete-confirm');
-    const deadline = Date.now() + 3000;
-    while (rowCount() === before && Date.now() < deadline) await wait(50);
+    await until('the row to be deleted', () => rowCount() === before - 1);
     assert(rowCount() === before - 1, 'one row deleted', { before, after: rowCount() });
   });
 
@@ -158,14 +156,14 @@ run(async () => {
 
     const autoInsert = await ui.checked('settings-auto-insert');
     await ui.click('settings-auto-insert');
-    const deadline = Date.now() + 2000;
-    while (settings().input.autoInsert === autoInsert && Date.now() < deadline) await wait(50);
-    assert(settings().input.autoInsert === !autoInsert, 'autoInsert toggled', settings().input);
+    await until('autoInsert to be saved', () => settings().input.autoInsert === !autoInsert);
 
+    // One change at a time: the panel rejects a second update while a save is in flight
+    // (users cannot do this: controls are disabled while saving)
     await ui.selectLabel('settings-language', '粵語');
+    await until('the language to be saved', () => settings().asr.language === 'yue');
     await ui.selectLabel('settings-retention', '30');
-    await wait(300);
-    assert(settings().asr.language === 'yue' && settings().history.retentionDays === 30, 'selects saved', settings());
+    await until('the retention to be saved', () => settings().history.retentionDays === 30);
 
     const url = settings().asr.whisperServerUrl;
     await ui.type('settings-server-url', 'ftp://example.com');
@@ -174,12 +172,10 @@ run(async () => {
     assert(settings().asr.whisperServerUrl === url, 'invalid URL not saved', settings().asr.whisperServerUrl);
     await ui.type('settings-server-url', 'http://127.0.0.1:9999');
     await ui.blur('settings-server-url');
-    await wait(300);
-    assert(settings().asr.whisperServerUrl === 'http://127.0.0.1:9999', 'valid URL saved', settings().asr.whisperServerUrl);
+    await until('the valid URL to be saved', () => settings().asr.whisperServerUrl === 'http://127.0.0.1:9999');
 
     settingsService.update({ input: { autoInsert } });
-    await wait(300);
-    assert((await ui.checked('settings-auto-insert')) === autoInsert, 'toggle synced from settings.onChanged');
+    await until('the toggle to follow settings.onChanged', async () => (await ui.checked('settings-auto-insert')) === autoInsert);
     await ui.screenshot('3-settings-light');
   });
 
@@ -195,18 +191,16 @@ run(async () => {
 
   await test('the recording hook still starts and stops the recorder', async () => {
     ui.console.length = 0;
+    const log = (): string => ui.console.join('\n');
     ui.window.webContents.send('asr:status', 'listening');
-    await wait(300);
+    await until('the recorder to start', () => log().includes('Starting audio recording'));
     ui.window.webContents.send('asr:status', 'idle');
-    await wait(300);
-    const log = ui.console.join('\n');
-    assert(log.includes('Starting audio recording'), 'recorder started on listening', log);
-    assert(log.includes('Stopping audio recording') || log.includes('Failed to start recording'), 'recorder handled the stop', log);
+    await until('the recorder to stop', () => log().includes('Stopping audio recording') || log().includes('Failed to start recording'));
   });
 
   await test('dark mode renders', async () => {
     nativeTheme.themeSource = 'dark';
-    await wait(300);
+    await ui.waitUntil('dark mode to apply', "matchMedia('(prefers-color-scheme: dark)').matches");
     await ui.click('tab-vocabulary');
     await ui.screenshot('5-vocabulary-dark');
     await ui.click('tab-settings');

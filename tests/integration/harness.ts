@@ -63,9 +63,13 @@ export const wait = (ms: number): Promise<void> => new Promise((resolve) => setT
  * times slower than a laptop, and asynchronous work (history writes, transcription,
  * insertion) must be awaited by its effect, not by elapsed time.
  */
-export async function until(description: string, check: () => boolean, timeoutMs = 10000): Promise<void> {
+export async function until(
+  description: string,
+  check: () => boolean | Promise<boolean>,
+  timeoutMs = 10000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  while (!check()) {
+  while (!(await check())) {
     if (Date.now() > deadline) throw new Error(`Timed out after ${timeoutMs} ms waiting for ${description}`);
     await wait(25);
   }

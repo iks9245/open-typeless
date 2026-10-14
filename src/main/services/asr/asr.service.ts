@@ -9,9 +9,31 @@ import log from 'electron-log';
 import { WhisperClient } from './lib/whisper-client';
 import { loadWhisperConfig } from './lib/config';
 import { floatingWindow } from '../../windows';
+import { settingsService } from '../settings';
 import type { ASRConfig, ASRResult, ASRStatus } from '../../../shared/types/asr';
 
 const logger = log.scope('asr-service');
+
+/** PCM bytes per millisecond for 16-bit, 16 kHz, mono audio. */
+const PCM_BYTES_PER_MS = (16000 * 2) / 1000;
+
+/**
+ * Everything a stopped session produced, for callers that record history.
+ */
+export interface ASRSessionOutcome {
+  /** Final (or last interim) result, or null if none arrived */
+  result: ASRResult | null;
+  /** Duration of the audio submitted for transcription */
+  audioDurationMs: number;
+  /** Time from stop request to result (or timeout) */
+  latencyMs: number;
+  /** Language reported by the engine; whisper.cpp JSON responses do not include it */
+  detectedLanguage: string | null;
+  /** Last client error during this session, if any */
+  error: string | null;
+  /** WAV sent to the engine, or null when no audio was submitted */
+  wav: Buffer | null;
+}
 
 /**
  * Event types emitted by ASRService.
@@ -61,6 +83,7 @@ export class ASRService extends EventEmitter {
   private status: ASRStatus = 'idle';
   private finalResult: ASRResult | null = null;
   private lastResult: ASRResult | null = null;
+  private sessionError: string | null = null;
 
   /**
    * Get current ASR status.
@@ -85,8 +108,13 @@ export class ASRService extends EventEmitter {
     logger.info('Starting ASR session');
     this.reset();
 
-    // Load whisper.cpp config (env vars + optional runtime overrides)
+    // Load whisper.cpp config: settings (which default to env vars), then runtime overrides
     const whisperConfig = loadWhisperConfig();
+    const settings = settingsService.get();
+    if (settings.success) {
+      whisperConfig.serverUrl = settings.data.asr.whisperServerUrl;
+      whisperConfig.language = settings.data.asr.language ?? undefined;
+    }
     if (config?.serverUrl) whisperConfig.serverUrl = config.serverUrl;
     if (config?.language) whisperConfig.language = config.language;
 
@@ -119,9 +147,20 @@ export class ASRService extends EventEmitter {
    * @returns The final ASR result, or null if no result was received
    */
   async stop(): Promise<ASRResult | null> {
+    return (await this.stopWithOutcome()).result;
+  }
+
+  /**
+   * Stop ASR session and report what it produced.
+   *
+   * @returns The result together with audio duration, latency, error and submitted WAV
+   */
+  async stopWithOutcome(): Promise<ASRSessionOutcome> {
+    const startedAt = Date.now();
+
     if (!this.client || this.status === 'idle') {
       logger.warn('No active ASR session to stop');
-      return null;
+      return this.buildOutcome(null, startedAt);
     }
 
     logger.info('Stopping ASR session');
@@ -132,12 +171,15 @@ export class ASRService extends EventEmitter {
 
       // Wait for final result with timeout
       const result = await this.waitForFinalResult();
+      // Read submitted audio before cleanup() disconnects the client and clears it
+      const outcome = this.buildOutcome(result, startedAt);
       this.cleanup();
-      return result;
+      return outcome;
     }
 
+    const outcome = this.buildOutcome(this.finalResult, startedAt);
     this.cleanup();
-    return this.finalResult;
+    return outcome;
   }
 
   /**
@@ -170,7 +212,23 @@ export class ASRService extends EventEmitter {
   private reset(): void {
     this.finalResult = null;
     this.lastResult = null;
+    this.sessionError = null;
     this.status = 'idle';
+  }
+
+  /**
+   * Assemble the session outcome from the current client state.
+   */
+  private buildOutcome(result: ASRResult | null, startedAt: number): ASRSessionOutcome {
+    const audio = this.client?.submittedAudio ?? { pcmBytes: 0, wav: null };
+    return {
+      result,
+      audioDurationMs: Math.round(audio.pcmBytes / PCM_BYTES_PER_MS),
+      latencyMs: Date.now() - startedAt,
+      detectedLanguage: null,
+      error: this.sessionError,
+      wav: audio.wav,
+    };
   }
 
   /**
@@ -206,6 +264,7 @@ export class ASRService extends EventEmitter {
 
     this.client.on('error', (error) => {
       logger.error('Whisper client error', { message: error.message });
+      this.sessionError = error.message;
       this.updateStatus('error');
       this.emit('error', error);
       floatingWindow.sendError(error.message);

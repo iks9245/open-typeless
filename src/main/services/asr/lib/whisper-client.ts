@@ -65,6 +65,9 @@ export class WhisperClient extends EventEmitter {
   private readonly config: WhisperClientConfig;
   private connectionState: ConnectionState = 'disconnected';
   private audioChunks: Buffer[] = [];
+  // Audio of the session being transcribed, kept until disconnect for history
+  private submittedPcmBytes = 0;
+  private submittedWav: Buffer | null = null;
 
   constructor(config: WhisperClientConfig) {
     super();
@@ -79,8 +82,18 @@ export class WhisperClient extends EventEmitter {
     return this.connectionState;
   }
 
+  /**
+   * Audio submitted by the last finishAudio() call: PCM byte count and the WAV sent
+   * to the server (null when nothing was submitted). Cleared on connect/disconnect.
+   */
+  get submittedAudio(): { pcmBytes: number; wav: Buffer | null } {
+    return { pcmBytes: this.submittedPcmBytes, wav: this.submittedWav };
+  }
+
   async connect(): Promise<void> {
     this.audioChunks = [];
+    this.submittedPcmBytes = 0;
+    this.submittedWav = null;
     this.updateState('connecting');
     this.emitStatus('connecting');
 
@@ -115,6 +128,8 @@ export class WhisperClient extends EventEmitter {
 
   disconnect(): void {
     this.audioChunks = [];
+    this.submittedPcmBytes = 0;
+    this.submittedWav = null;
     this.updateState('disconnected');
     this.emitStatus('idle');
   }
@@ -147,6 +162,7 @@ export class WhisperClient extends EventEmitter {
   private async transcribe(): Promise<void> {
     const pcmData = Buffer.concat(this.audioChunks);
     this.audioChunks = [];
+    this.submittedPcmBytes = pcmData.length;
 
     if (pcmData.length === 0) {
       logger.warn('No audio data to transcribe');
@@ -157,6 +173,7 @@ export class WhisperClient extends EventEmitter {
     logger.info('Sending audio to whisper.cpp', { bytes: pcmData.length });
 
     const wavData = buildWAV(pcmData);
+    this.submittedWav = wavData;
     const formData = new FormData();
     formData.append('file', new Blob([wavData], { type: 'audio/wav' }), 'audio.wav');
     formData.append('response_format', 'json');

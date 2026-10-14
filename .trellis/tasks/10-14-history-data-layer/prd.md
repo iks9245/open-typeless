@@ -269,6 +269,7 @@ handleKeyUp
 | ~~原生模組在純 Node 測試下無法載入~~ | — | 同上，N-API 不受 ABI 影響，單元測試可直接用 Node 跑 |
 | Forge 的 `rebuildConfig.force` 會從原始碼重編 `better-sqlite3` | 啟動與打包變慢；執行期不使用該產物 | T8 實測 `pnpm start` 與 `pnpm package` 時確認；必要時用 `rebuildConfig.ignoreModules` 排除 |
 | `@types/better-sqlite3@9.6` 對應較舊的 API | 少數型別不符 | v13 不自帶型別；T2 寫 client 時留意 |
+| 既有：轉寫失敗時 `waitForFinalResult` 不監聽錯誤，要等 10 秒逾時才結束（T6 實測 10.3 秒） | 使用者每次失敗都多等 10 秒 | 非本任務範圍。修正需同時調整浮動視窗的錯誤顯示，另開任務處理；T6 已讓這類失敗正確記錄為 `failed / transcription_failed` |
 | 既有：`ws` 被列為 Vite external 但沒加進 Forge 的 `nativeModules` 複製清單 | 若主程序在載入時 `require('ws')`，打包後可能找不到模組 | 非本任務造成，T8 打包實測時一併確認 |
 | 打包後找不到 migration 檔 | 資料庫不初始化 | `extraResource` + 啟動時記錄實際路徑；失敗進入降級模式 |
 | 歷史寫入拖慢插入 | 使用者體驗退化 | 寫入一律在插入之後 |

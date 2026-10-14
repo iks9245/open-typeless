@@ -5,8 +5,8 @@
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { count, eq } from 'drizzle-orm';
-import { TMP_DIR, assert, run, silenceChunk, startFakeWhisper, test, toneChunk, unusedUrl, wait } from './harness';
+import { count, eq, inArray } from 'drizzle-orm';
+import { TMP_DIR, assert, run, silenceChunk, startFakeWhisper, test, toneChunk, unusedUrl, until, wait } from './harness';
 
 interface PushToTalkInternals {
   handleKeyDown(): Promise<void>;
@@ -15,7 +15,7 @@ interface PushToTalkInternals {
 }
 
 interface KeyboardInternals {
-  config: { triggerKey: number };
+  config: { triggerKey: number; minRecordingMs: number };
   onKeyDown: (() => void) | null;
   onKeyUp: (() => void) | null;
   onCancel: ((durationMs: number) => void) | null;
@@ -48,11 +48,14 @@ run(async () => {
   const ptt = pushToTalkService as unknown as PushToTalkInternals;
   const keyboard = keyboardService as unknown as KeyboardInternals;
 
+  const activeRows = (): number =>
+    getDb().select({ c: count() }).from(transcriptions)
+      .where(inArray(transcriptions.status, ['recording', 'processing'])).get()?.c ?? 0;
   const session = async (audio: ArrayBuffer = toneChunk()): Promise<void> => {
     await ptt.handleKeyDown();
     asrService.processAudioChunk(audio);
     await ptt.handleKeyUp();
-    await wait(300);
+    await until('the session to settle', () => !ptt.isActive && activeRows() === 0);
   };
   const latest = () => {
     const result = historyService.list({ limit: 1 });
@@ -89,8 +92,9 @@ run(async () => {
   await test('saved audio is written privately and removed with its row', async () => {
     configure({ history: { saveAudio: true } });
     await session();
+    // The WAV is written after the row completes
+    await until('the audio to be saved', () => latest().hasAudio);
     const row = latest();
-    assert(row.hasAudio, 'row has audio', row);
     const stored = getDb().select({ audioPath: transcriptions.audioPath }).from(transcriptions)
       .where(eq(transcriptions.id, row.id)).get();
     assert(stored?.audioPath, 'audio path stored', stored);
@@ -122,7 +126,7 @@ run(async () => {
   await test('an unreachable server is recorded as start_failed', async () => {
     configure({ asr: { whisperServerUrl: await unusedUrl() } });
     await ptt.handleKeyDown();
-    await wait(200);
+    await until('the start failure to be recorded', () => latest().status === 'failed' && !ptt.isActive);
     configure({ asr: { whisperServerUrl: whisper.url } });
     const row = latest();
     assert(row.status === 'failed' && row.errorCode === 'start_failed', 'row start_failed', row);
@@ -134,13 +138,16 @@ run(async () => {
     keyboard.onKeyUp = () => void ptt.handleKeyUp();
     keyboard.onCancel = (durationMs) => void (pushToTalkService as unknown as { handleCancel(ms: number): Promise<void> }).handleCancel(durationMs);
     const before = { inferences: whisper.inferences, inserted: inserted.length, rows: rowCount() };
+    // A short press must stay short however slow the machine is
+    const minRecordingMs = keyboard.config.minRecordingMs;
+    keyboard.config.minRecordingMs = 5000;
 
     keyboard.handleKeyDown(keyboard.config.triggerKey);
     await wait(50);
     asrService.processAudioChunk(toneChunk(50));
-    await wait(30);
     keyboard.handleKeyUp(keyboard.config.triggerKey);
-    await wait(500);
+    await until('the cancelled session to end and its row to be removed', () => !ptt.isActive && rowCount() === before.rows);
+    keyboard.config.minRecordingMs = minRecordingMs;
 
     assert(whisper.inferences === before.inferences, 'no inference request');
     assert(inserted.length === before.inserted, 'nothing inserted');
@@ -150,20 +157,20 @@ run(async () => {
 
   await test('a normal key press after a cancel works', async () => {
     keyboard.handleKeyDown(keyboard.config.triggerKey);
-    await wait(100);
+    // Audio sent before the session is listening would be dropped
+    await until('the session to be listening', () => asrService.currentStatus === 'listening');
     asrService.processAudioChunk(toneChunk());
     await wait(300);
     keyboard.handleKeyUp(keyboard.config.triggerKey);
-    await wait(800);
-    assert(latest().status === 'completed', 'row completed', latest());
+    await until('the dictation to complete', () => latest().status === 'completed' && !ptt.isActive);
   });
 
   await test('with history disabled dictation still works and no row is written', async () => {
     configure({ history: { enabled: false } });
     const before = { rows: rowCount(), inserted: inserted.length };
     await session();
+    await until('the text to be inserted', () => inserted.length === before.inserted + 1);
     assert(rowCount() === before.rows, 'no new row', rowCount());
-    assert(inserted.length === before.inserted + 1, 'text inserted');
     configure({ history: { enabled: true } });
   });
 

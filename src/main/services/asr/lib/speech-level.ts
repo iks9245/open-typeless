@@ -9,14 +9,16 @@ const FRAME_SAMPLES = 320;
 const FRAME_MS = 20;
 
 /**
- * A frame counts as voiced at or above this RMS level.
- * Initial estimate (about int16 RMS 184); calibrate with real recordings, since the
- * renderer captures with echo cancellation, noise suppression and auto gain enabled.
+ * A frame counts as voiced at or above this RMS level (about int16 RMS 104).
+ * Not yet calibrated with real recordings, so it errs toward sending audio: quiet speech
+ * dropped as silence would lose a dictation, while noise sent to whisper only does what
+ * happened before this gate existed. The renderer captures with echo cancellation,
+ * noise suppression and auto gain enabled.
  */
-export const VOICED_FRAME_DBFS = -45;
+export const VOICED_FRAME_DBFS = -50;
 
-/** Recordings with less voiced audio than this are treated as silence */
-export const MIN_VOICED_MS = 200;
+/** Recordings with less voiced audio than this are treated as silence (lenient, see above) */
+export const MIN_VOICED_MS = 100;
 
 /** Lowest level reported, used instead of -Infinity for digital silence */
 const FLOOR_DBFS = -120;

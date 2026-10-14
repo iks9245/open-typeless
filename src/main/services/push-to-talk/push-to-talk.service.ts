@@ -244,12 +244,12 @@ export class PushToTalkService {
         this.recordCompletion(historyId, outcome, result.text, insert);
       } else {
         logger.info('No ASR result to insert');
-        // Hide floating window
-        floatingWindow.hide();
 
         if (outcome.error) {
+          // Keep the error visible; ASRService already showed it and the floating window auto-hides it
           historyService.fail(historyId, 'transcription_failed', outcome.error);
         } else {
+          floatingWindow.hide();
           this.recordCompletion(historyId, outcome, '');
         }
       }

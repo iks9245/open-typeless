@@ -272,7 +272,8 @@ export class ASRService extends EventEmitter {
   }
 
   /**
-   * Wait for final result with timeout.
+   * Wait for the final result, a client error, or a timeout.
+   * Resolves with the final (or last interim) result; null when none arrived.
    */
   private waitForFinalResult(): Promise<ASRResult | null> {
     return new Promise((resolve) => {
@@ -283,46 +284,51 @@ export class ASRService extends EventEmitter {
       }
 
       const TIMEOUT_MS = 10000; // 10 seconds timeout
+      const client = this.client;
       let resolved = false;
+      let doneTimeoutId: NodeJS.Timeout | null = null;
+
+      const finish = (result: ASRResult | null): void => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
+        if (doneTimeoutId) clearTimeout(doneTimeoutId);
+        client?.off('result', resultHandler);
+        client?.off('status', statusHandler);
+        client?.off('error', errorHandler);
+        resolve(result);
+      };
 
       const resultHandler = (result: ASRResult): void => {
-        if (result.isFinal && !resolved) {
-          resolved = true;
-          this.client?.off('result', resultHandler);
-          clearTimeout(timeoutId);
-          resolve(result);
+        if (result.isFinal) {
+          finish(result);
         }
+      };
+
+      const statusHandler = (status: ASRStatus): void => {
+        if (status === 'done' && !doneTimeoutId) {
+          // Give a small delay for the final result to come through
+          doneTimeoutId = setTimeout(() => finish(this.finalResult ?? this.lastResult), 500);
+        } else if (status === 'error') {
+          finish(this.finalResult ?? this.lastResult);
+        }
+      };
+
+      // Transcription failed: no final result will follow, so stop waiting.
+      // sessionError is captured by the listener registered in setupClientListeners().
+      const errorHandler = (): void => {
+        finish(this.finalResult ?? this.lastResult);
       };
 
       const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          this.client?.off('result', resultHandler);
-          logger.warn('Timeout waiting for final result, returning last result');
-          // Return last result or final result, whichever is available
-          resolve(this.finalResult ?? this.lastResult);
-        }
+        logger.warn('Timeout waiting for final result, returning last result');
+        // Return last result or final result, whichever is available
+        finish(this.finalResult ?? this.lastResult);
       }, TIMEOUT_MS);
 
-      this.client?.on('result', resultHandler);
-
-      // Also listen for done status as backup
-      const statusHandler = (status: ASRStatus): void => {
-        if (status === 'done' && !resolved) {
-          // Give a small delay for the final result to come through
-          setTimeout(() => {
-            if (!resolved) {
-              resolved = true;
-              this.client?.off('result', resultHandler);
-              this.client?.off('status', statusHandler);
-              clearTimeout(timeoutId);
-              resolve(this.finalResult ?? this.lastResult);
-            }
-          }, 500);
-        }
-      };
-
-      this.client?.on('status', statusHandler);
+      client?.on('result', resultHandler);
+      client?.on('status', statusHandler);
+      client?.on('error', errorHandler);
     });
   }
 
@@ -336,7 +342,14 @@ export class ASRService extends EventEmitter {
       this.client = null;
     }
 
-    this.updateStatus('idle');
+    if (this.status === 'error') {
+      // Leave the error on screen; the floating window auto-hides it after sendError()
+      this.status = 'idle';
+      this.emit('status', 'idle');
+      logger.debug('Status updated', { status: 'idle' });
+    } else {
+      this.updateStatus('idle');
+    }
     logger.info('ASR session cleaned up');
   }
 }

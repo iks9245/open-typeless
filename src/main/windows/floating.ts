@@ -1,3 +1,4 @@
+import type { InputMode } from '../../shared/constants/command';
 /**
  * Floating Window Manager.
  * Manages the ASR status floating window that displays recording state and transcription.
@@ -162,6 +163,7 @@ export class FloatingWindowManager {
   hide(): void {
     this.clearAutoHideTimer();
     this.window?.hide();
+    this.sendMode('dictation');
     // Reset height for next show
     this.resetHeight();
   }
@@ -206,6 +208,12 @@ export class FloatingWindowManager {
     }
 
     this.window.webContents.send(IPC_CHANNELS.ASR.STATUS, status);
+  }
+
+  /** Tell the floating renderer which voice input mode is active. */
+  sendMode(mode: InputMode): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    this.window.webContents.send(IPC_CHANNELS.FLOATING_WINDOW.MODE, mode);
   }
 
   /**

@@ -9,17 +9,17 @@ import { count, eq, inArray } from 'drizzle-orm';
 import { TMP_DIR, assert, run, silenceChunk, startFakeOmlx, startFakeWhisper, writeOmlxSettings, test, toneChunk, unusedUrl, until, wait } from './harness';
 
 interface PushToTalkInternals {
-  handleKeyDown(): Promise<void>;
+  handleKeyDown(mode?: 'dictation' | 'command'): Promise<void>;
   handleKeyUp(): Promise<void>;
   isActive: boolean;
 }
 
 interface KeyboardInternals {
   config: { triggerKey: number; minRecordingMs: number };
-  onKeyDown: (() => void) | null;
+  onKeyDown: ((mode: 'dictation' | 'command') => void) | null;
   onKeyUp: (() => void) | null;
   onCancel: ((durationMs: number) => void) | null;
-  handleKeyDown(keycode: number): void;
+  handleKeyDown(keycode: number, modifiers?: { shift?: boolean }): void;
   handleKeyUp(keycode: number): void;
 }
 
@@ -34,6 +34,7 @@ run(async () => {
   const { textInputService } = await import('../../src/main/services/text-input');
   const { keyboardService } = await import('../../src/main/services/keyboard');
   const { pushToTalkService } = await import('../../src/main/services/push-to-talk/push-to-talk.service');
+  const { commandService } = await import('../../src/main/services/command');
   const { floatingWindow } = await import('../../src/main/windows');
 
   // asr.handler registers this listener in the app; without it EventEmitter throws on 'error'
@@ -121,6 +122,154 @@ run(async () => {
       omlx.mode = 'ok';
     }
   });
+  const commandSession = async (audio: ArrayBuffer = toneChunk()): Promise<void> => {
+    const callbacks = { down: keyboard.onKeyDown, up: keyboard.onKeyUp, cancel: keyboard.onCancel };
+    keyboard.onKeyDown = mode => void ptt.handleKeyDown(mode);
+    keyboard.onKeyUp = () => void ptt.handleKeyUp();
+    keyboard.onCancel = ms => void (pushToTalkService as unknown as { handleCancel(ms: number): Promise<void> }).handleCancel(ms);
+    try {
+      keyboard.handleKeyDown(keyboard.config.triggerKey, { shift: true });
+      await until('command session to listen', () => asrService.currentStatus === 'listening');
+      asrService.processAudioChunk(audio);
+      await wait(250);
+      keyboard.handleKeyUp(keyboard.config.triggerKey);
+      await until('command session to finish', () => !ptt.isActive && activeRows() === 0);
+    } finally {
+      keyboard.onKeyDown = callbacks.down;
+      keyboard.onKeyUp = callbacks.up;
+      keyboard.onCancel = callbacks.cancel;
+    }
+  };
+
+  for (const selection of ['private selected text', null]) {
+    await test(`command mode ${selection === null ? 'generates at the cursor' : 'rewrites the selection'} and records only instruction and output`, async () => {
+      const original = settingsService.get();
+      assert(original.success, 'settings readable');
+      const capture = commandService.captureSelection;
+      const sendStatus = floatingWindow.sendStatus;
+      const sendMode = floatingWindow.sendMode;
+      const statuses: string[] = [];
+      const modes: string[] = [];
+      try {
+        await writeOmlxSettings(omlx.port, 'command-key');
+        configure({ command: { enabled: true, model: 'command-test-model' }, polish: { enabled: true, model: 'different-polish-model' } });
+        commandService.captureSelection = async () => selection;
+        omlx.reply = selection === null ? 'Generated letter' : 'Edited selection';
+        floatingWindow.sendStatus = status => { statuses.push(status); sendStatus.call(floatingWindow, status); };
+        floatingWindow.sendMode = mode => { modes.push(mode); sendMode.call(floatingWindow, mode); };
+        await commandSession();
+        const row = latest();
+        assert(inserted.at(-1) === omlx.reply, 'command output inserted', inserted.at(-1));
+        assert(row.mode === 'command' && row.rawText === '你好世界' && row.finalText === omlx.reply, 'instruction and output recorded', row);
+        assert(selection === null || !JSON.stringify(row).includes(selection), 'selection absent from history');
+        assert(row.status === 'completed' && row.insertStatus === 'inserted', 'command completed', row);
+        assert(omlx.lastBody?.model === 'command-test-model', 'separate command model used', omlx.lastBody?.model);
+        const messages = omlx.lastBody?.messages as { role: string; content: string }[];
+        assert(messages[1].content === '<instruction>你好世界</instruction>' + (selection === null ? '' : `\n<selection>${selection}</selection>`), 'command prompt sent');
+        assert(modes.includes('command'), 'floating command mode sent', modes);
+        const afterStop = statuses.slice(statuses.indexOf('processing'));
+        assert(afterStop.at(-1) === 'done' && !afterStop.includes('idle'), 'floating remains processing until command completes', statuses);
+      } finally {
+        commandService.captureSelection = capture;
+        floatingWindow.sendStatus = sendStatus;
+        floatingWindow.sendMode = sendMode;
+        configure(original.data);
+        omlx.reply = '你好，世界。';
+        await writeOmlxSettings(null, null);
+      }
+    });
+  }
+
+  for (const failure of ['omlx', 'capture', 'empty-output', 'missing-omlx'] as const) {
+    await test(`command ${failure} failure inserts nothing and records command_failed`, async () => {
+      const original = settingsService.get();
+      assert(original.success, 'settings readable');
+      const capture = commandService.captureSelection;
+      const sendError = floatingWindow.sendError;
+      const errors: string[] = [];
+      const before = inserted.length;
+      try {
+        await writeOmlxSettings(failure === 'missing-omlx' ? null : omlx.port, 'command-key');
+        configure({ command: { enabled: true } });
+        commandService.captureSelection = async () => {
+          if (failure === 'capture') throw new Error('private selected text');
+          return 'private selected text';
+        };
+        if (failure === 'omlx') omlx.mode = 'error';
+        if (failure === 'empty-output') omlx.reply = '<think>thinking</think>';
+        floatingWindow.sendError = error => { errors.push(error); sendError.call(floatingWindow, error); };
+        await commandSession();
+        assert(inserted.length === before, 'nothing inserted');
+        const row = latest();
+        assert(row.mode === 'command' && row.status === 'failed' && row.errorCode === 'command_failed', 'command failure recorded', row);
+        assert(!JSON.stringify(row).includes('private selected text'), 'selection absent from failed history');
+        assert(errors.some(error => error.startsWith('指令失敗：')), 'command failure displayed', errors);
+      } finally {
+        commandService.captureSelection = capture;
+        floatingWindow.sendError = sendError;
+        configure(original.data);
+        omlx.mode = 'ok';
+        omlx.reply = '你好，世界。';
+        await writeOmlxSettings(null, null);
+      }
+    });
+  }
+
+  await test('an empty command instruction inserts nothing and records empty', async () => {
+    const original = settingsService.get();
+    assert(original.success, 'settings readable');
+    const capture = commandService.captureSelection;
+    const before = { inserted: inserted.length, requests: omlx.requests };
+    try {
+      configure({ command: { enabled: true } });
+      commandService.captureSelection = async () => { throw new Error('capture must not matter for silence'); };
+      await commandSession(silenceChunk(2000));
+      assert(inserted.length === before.inserted, 'nothing inserted');
+      assert(latest().status === 'empty' && latest().mode === 'command', 'empty command recorded', latest());
+      assert(omlx.requests === before.requests, 'no command request');
+    } finally {
+      commandService.captureSelection = capture;
+      configure(original.data);
+    }
+  });
+
+  await test('a short command press cancels without selection capture, insertion or history', async () => {
+    const original = settingsService.get();
+    assert(original.success, 'settings readable');
+    const capture = commandService.captureSelection;
+    const minimum = keyboard.config.minRecordingMs;
+    const before = { rows: rowCount(), inserted: inserted.length, inferences: whisper.inferences };
+    let captures = 0;
+    try {
+      configure({ command: { enabled: true } });
+      keyboard.config.minRecordingMs = 5000;
+      commandService.captureSelection = async () => { captures++; return 'private selection'; };
+      await commandSession(toneChunk(50));
+      assert(captures === 0 && inserted.length === before.inserted, 'no capture or insertion');
+      assert(rowCount() === before.rows && whisper.inferences === before.inferences, 'no history or transcription');
+    } finally {
+      keyboard.config.minRecordingMs = minimum;
+      commandService.captureSelection = capture;
+      configure(original.data);
+    }
+  });
+
+  await test('disabled command mode treats Shift + Right Option as dictation', async () => {
+    const original = settingsService.get();
+    assert(original.success, 'settings readable');
+    const capture = commandService.captureSelection;
+    let captures = 0;
+    try {
+      configure({ command: { enabled: false }, polish: { enabled: false } });
+      commandService.captureSelection = async () => { captures++; return 'private selected text'; };
+      await commandSession();
+      assert(captures === 0, 'selection not captured');
+      assert(inserted.at(-1) === '你好世界' && latest().mode === 'dictation', 'ordinary dictation inserted and recorded', latest());
+    } finally {
+      commandService.captureSelection = capture;
+      configure(original.data);
+    }
+  });
   await omlx.close();
 
   await test('with autoInsert off nothing is typed and the row says skipped', async () => {
@@ -150,7 +299,10 @@ run(async () => {
 
   await test('a silent recording is not sent for transcription and nothing is inserted', async () => {
     const before = { inferences: whisper.inferences, inserted: inserted.length };
+    const started = Date.now();
     await session(silenceChunk(2000));
+    // The skipped session reports 'done' synchronously; it must not wait for the 10 s timeout
+    assert(Date.now() - started < 3000, 'finished quickly', Date.now() - started);
     assert(whisper.inferences === before.inferences, 'no inference request', whisper.inferences);
     assert(inserted.length === before.inserted, 'nothing inserted');
     assert(latest().status === 'empty', 'row is empty', latest());

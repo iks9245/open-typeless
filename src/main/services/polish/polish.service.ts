@@ -1,3 +1,5 @@
+import { withOmlxTimeout } from './lib/timeout';
+import { warmOmlx } from './lib/warm-up';
 import type { PolishInfo } from '../../../shared/types/polish';
 import type { AppSettings } from '../../../shared/types/settings';
 import { readOmlxConfig } from './lib/omlx-config';
@@ -67,19 +69,7 @@ export class PolishService {
   }
 
   warmUp(model: string): void {
-    const warmed = this.warmedAt.get(model);
-    if (this.warming.has(model) || (warmed !== undefined && this.deps.now() - warmed < 60000)) return;
-    this.warming.add(model);
-    void this.withTimeout(30000, async (signal) => {
-      const config = await readOmlxConfig(this.deps);
-      if (!config) throw new Error('oMLX not installed');
-      await createCompletion(config, { model, messages: buildPolishMessages('測試', []), maxTokens: 1 }, this.deps.fetch, signal);
-      this.warmedAt.set(model, this.deps.now());
-    }).catch(() => {
-      this.deps.logger.debug('oMLX warm-up failed');
-    }).finally(() => {
-      this.warming.delete(model);
-    });
+    warmOmlx(this.deps, model, this.warming, this.warmedAt);
   }
 
   startWarmups(): void {
@@ -97,19 +87,7 @@ export class PolishService {
     this.previous = null;
   }
 
-  private async withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_resolve, reject) => {
-      timer = this.deps.timers.setTimeout(() => {
-        reject(new Error('oMLX request timed out'));
-        controller.abort();
-      }, ms);
-    });
-    try {
-      return await Promise.race([run(controller.signal), timeout]);
-    } finally {
-      if (timer !== undefined) this.deps.timers.clearTimeout(timer);
-    }
+  private withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    return withOmlxTimeout(this.deps.timers, ms, run);
   }
 }

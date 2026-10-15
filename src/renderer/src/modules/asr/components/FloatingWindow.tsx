@@ -3,7 +3,9 @@
  * The main component for the ASR floating window that displays status and transcription.
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { floatingApi } from '../../../../floating/api';
+import type { InputMode } from '../../../../../shared/constants/command';
 import { useASRStatus } from '../hooks';
 import { StatusIndicator } from './StatusIndicator';
 import { TranscriptDisplay } from './TranscriptDisplay';
@@ -27,6 +29,8 @@ import { ErrorDisplay } from './ErrorDisplay';
  */
 export function FloatingWindow(): ReactNode {
   const { status, result, error } = useASRStatus();
+  const [mode, setMode] = useState<InputMode>('dictation');
+  useEffect(() => floatingApi.floatingWindow.onMode(setMode), []);
 
   // Determine what to show based on status
   // FIX: Show transcript during listening state for real-time streaming display
@@ -41,7 +45,10 @@ export function FloatingWindow(): ReactNode {
     <div className="floating-window">
       <div className="floating-window__content">
         {/* Status indicator - always visible */}
-        {showStatusIndicator && <StatusIndicator status={status} />}
+        <div className="floating-window__status">
+          {showStatusIndicator && <StatusIndicator status={status} />}
+          {mode === 'command' && <span className="floating-window__mode">指令模式</span>}
+        </div>
 
         {/* Transcript display - show during listening, processing, and done */}
         {hasTranscriptText && result && (

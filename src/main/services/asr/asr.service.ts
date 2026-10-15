@@ -330,6 +330,13 @@ export class ASRService extends EventEmitter {
         return;
       }
 
+      // The client already finished, e.g. finishAudio() skipped a silent recording and
+      // reported 'done' synchronously: no further event will arrive
+      if (this.status === 'done' || this.status === 'error') {
+        resolve(this.lastResult);
+        return;
+      }
+
       const TIMEOUT_MS = 10000; // 10 seconds timeout
       const client = this.client;
       let resolved = false;

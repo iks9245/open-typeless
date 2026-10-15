@@ -7,7 +7,7 @@ import path from 'node:path';
 import { BrowserWindow, clipboard, nativeTheme } from 'electron';
 import { count } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { assert, run, test, until } from './harness';
+import { assert, run, test, until, wait } from './harness';
 import { openMainWindow } from './ui';
 
 run(async () => {
@@ -109,9 +109,15 @@ run(async () => {
     assert(await ui.exec<boolean>(`document.querySelector('[data-testid="history-copy"]').disabled`), 'copy disabled for the empty session at the top');
     clipboard.clear();
     // navigator.clipboard needs a focused document, as when a user clicks the button
+    // Focus arrives asynchronously, and slower CI runners need more than one request
     ui.window.show();
-    ui.window.focus();
-    ui.window.webContents.focus();
+    const focusDeadline = Date.now() + 5000;
+    while (!(await ui.exec<boolean>('document.hasFocus()')) && Date.now() < focusDeadline) {
+      ui.window.focus();
+      ui.window.webContents.focus();
+      await wait(100);
+    }
+    assert(await ui.exec<boolean>('document.hasFocus()'), 'main window document focused');
     // Copy is disabled for sessions without text, so use the first item that has some
     const first = await ui.exec<string>(`(() => {
       const item = [...document.querySelectorAll('[data-testid="history-item"]')]
@@ -224,6 +230,45 @@ run(async () => {
     assert((await ui.text('history-raw')).includes('原始辨識'), 'original disclosure shown');
     await ui.exec(`document.querySelector('[data-testid="history-raw"] summary').click()`);
     assert((await ui.text('history-raw')).includes('你好世界'), 'raw text shown');
+  });
+
+  await test('command settings share oMLX availability and allow disabling the enabled mode', async () => {
+    const previous = settings().command;
+    try {
+      await ui.click('tab-settings');
+      await ui.waitFor('settings-command-enabled');
+      assert(await ui.exec<boolean>(`document.querySelector('#command-heading')?.textContent === '指令模式'`), 'command section shown');
+      assert(await ui.checked('settings-command-enabled'), 'command enabled by default');
+      assert(!(await ui.exec<boolean>(`document.querySelector('[data-testid="settings-command-enabled"]').disabled`)), 'enabled command can be turned off without oMLX');
+      assert(await ui.exec<boolean>(`document.querySelector('[data-testid="settings-command-model"]').value === 'Qwen3.8-27B-oQ4e-mtp'`), '27B command default shown');
+      await ui.click('settings-command-enabled');
+      await until('command disabled', () => !settings().command.enabled);
+      await ui.waitUntil('unavailable command switch disabled', `document.querySelector('[data-testid="settings-command-enabled"]').disabled`, 3000);
+    } finally {
+      settingsService.update({ command: previous });
+    }
+  });
+
+  await test('command history shows its output, badge and expandable spoken instruction', async () => {
+    const id = historyService.begin({ engine: 'whisper.cpp', mode: 'command' });
+    assert(id, 'command begun');
+    await historyService.complete(id, { rawText: '翻譯成英文', finalText: 'Hello, world.', audioDurationMs: 1000, latencyMs: 700, detectedLanguage: null });
+    await ui.click('tab-history');
+    await ui.waitFor('history-command', { count: 1, timeoutMs: 3000 });
+    assert((await ui.text('history-command')) === '指令', 'command badge shown');
+    assert((await ui.text('history-instruction')).includes('口述指令'), 'instruction disclosure shown');
+    await ui.exec(`document.querySelector('[data-testid="history-instruction"] summary').click()`);
+    assert((await ui.text('history-instruction')).includes('翻譯成英文'), 'instruction shown');
+    assert(await ui.exec<boolean>(`document.querySelector('[data-id="${id}"] [data-testid="history-text"]').textContent.includes('Hello, world.')`), 'command output shown');
+    assert(await ui.exec<boolean>(`!document.querySelector('[data-id="${id}"] [data-testid="history-polished"]')`), 'command is not labeled polished');
+  });
+
+  await test('command failures appear in the failure filter with a Chinese reason', async () => {
+    const id = historyService.begin({ engine: 'whisper.cpp', mode: 'command' });
+    assert(id && historyService.fail(id, 'command_failed', 'oMLX request failed'), 'command failure accepted');
+    await ui.selectLabel('history-status-filter', '失敗');
+    await ui.waitUntil('command failure shown', `[...document.querySelectorAll('[data-testid="history-text"]')].some(el => el.textContent.includes('指令執行失敗'))`, 3000);
+    await ui.selectLabel('history-status-filter', '全部');
   });
 
   await test('clearing history asks for confirmation, then shows the empty state', async () => {

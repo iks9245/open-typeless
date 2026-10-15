@@ -3,6 +3,7 @@
  * Extends the Window interface with the exposed API.
  */
 
+import type { InputMode } from '../shared/constants/command';
 import type { ASRResult, ASRStatus } from '../shared/types/asr';
 import type { IpcResult } from '../shared/types/common';
 import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from '../shared/types/history';
@@ -46,6 +47,7 @@ interface ASRApi {
  * Floating Window API interface exposed via contextBridge.
  */
 interface FloatingWindowApi {
+  onMode: (callback: (mode: InputMode) => void) => () => void;
   /**
    * Set content height for adaptive window sizing.
    * @param height - Content height in pixels (from scrollHeight)

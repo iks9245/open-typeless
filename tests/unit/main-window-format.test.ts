@@ -35,6 +35,7 @@ describe('Traditional Chinese history labels', () => {
   it.each([
     ['start_failed', '無法連線到 whisper 伺服器'],
     ['transcription_failed', '辨識失敗'],
+    ['command_failed', '指令執行失敗'],
     ['stop_failed', '結束錄音時出錯'],
     ['interrupted', 'app 在錄音中被結束'],
     ['future_error', '發生未知錯誤'], [null, '發生未知錯誤'],
@@ -89,6 +90,13 @@ describe('polish labels and model choices', () => {
       { id: 'missing', label: 'missing（未安裝）' },
     ]);
     expect(models).toHaveLength(5);
+  });
+
+  it('lists the 27B model first for command mode without changing polish order', () => {
+    const models = ['Qwen3.5-9B-4bit', 'Qwen3.8-27B-oQ4e-mtp'];
+    expect(polishModelOptions(models, models[1], models[1]).map(option => option.id)).toEqual([...models].reverse());
+    expect(polishModelOptions(models, models[0]).map(option => option.id)).toEqual(models);
+    expect(polishModelOptions([models[0]], models[1], models[1]).map(option => option.id)).toEqual([...models].reverse());
   });
 
   it('keeps missing recommendations selectable and does not duplicate an installed current model', () => {

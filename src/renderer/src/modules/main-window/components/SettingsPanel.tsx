@@ -1,3 +1,4 @@
+import { DEFAULT_COMMAND_MODEL } from '../../../../../shared/constants/command';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSettings } from '../hooks/SettingsContext';
 import { usePolishStatus } from '../hooks/usePolishStatus';
@@ -105,6 +106,20 @@ export function SettingsPanel({ active }: { active: boolean }) {
           </div>
         </div>
       </div><p className="muted help">啟用後每次聽寫約多等 0.5–2 秒；連不上 oMLX 或逾時時，會直接插入原始辨識文字。</p></section>
+      <section className="settings-section" aria-labelledby="command-heading"><h2 id="command-heading">指令模式</h2><div className="card">
+        <SettingRow title="指令模式">
+          <input type="checkbox" role="switch" className="switch" aria-label="指令模式" data-testid="settings-command-enabled"
+            checked={settings?.command.enabled ?? false} disabled={disabled || ((!polish.status?.available || Boolean(polish.error)) && !settings?.command.enabled)}
+            onChange={(event) => { void update({ command: { enabled: event.target.checked } }); }} />
+        </SettingRow>
+        <SettingRow title="指令模型">
+          <select aria-label="指令模型" data-testid="settings-command-model" value={settings?.command.model ?? ''}
+            disabled={disabled || !polish.status?.available || Boolean(polish.error)}
+            onChange={(event) => { void update({ command: { model: event.target.value } }); }}>
+            {polishModelOptions(polish.status?.models ?? [], settings?.command.model ?? '', DEFAULT_COMMAND_MODEL).map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </SettingRow>
+      </div><p className="muted help">按住 Shift + 右 Option 說出指令。有選取文字時依指令改寫並取代；沒有選取時在游標處插入產生的文字。每次約需 2–10 秒。</p></section>
       <section className="settings-section" aria-labelledby="input-heading"><h2 id="input-heading">輸入</h2><div className="card">
         <SettingRow title="自動插入文字" detail="辨識完成後，將文字插入目前使用的應用程式。">
           <input type="checkbox" role="switch" className="switch" aria-label="自動插入文字" data-testid="settings-auto-insert"

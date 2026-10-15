@@ -64,7 +64,7 @@ if (files.some((name) => name.startsWith('main-window'))) {
 const run = (bundle, tmp) => new Promise((resolve) => {
   const child = spawn(electron, [bundle], {
     cwd: root,
-    env: { ...process.env, ...uiEnv, INTEGRATION_TMP: tmp, ELECTRON_ENABLE_LOGGING: '0' },
+    env: { ...process.env, ...uiEnv, INTEGRATION_TMP: tmp, OMLX_SETTINGS_PATH: path.join(tmp, 'omlx', 'settings.json'), ELECTRON_ENABLE_LOGGING: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';

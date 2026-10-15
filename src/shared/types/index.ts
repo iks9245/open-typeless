@@ -13,6 +13,7 @@ export type {
 export type { AppSettings, AppSettingsPatch } from './settings';
 export type { IpcResult } from './common';
 export type { WhisperServerInfo } from './whisper-server';
+export type { PolishInfo, PolishUnavailableReason } from './polish';
 export type {
   TranscriptionItem,
   ListHistoryInput,

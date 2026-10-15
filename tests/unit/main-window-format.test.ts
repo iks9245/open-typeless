@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
+import { polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
 
 describe('history time formatting', () => {
   const now = new Date(2026, 9, 15, 12, 0);
@@ -70,5 +70,30 @@ describe('server labels and unexpected errors', () => {
     for (const value of [null, undefined, {}, '', new Error('')]) {
       expect(errorMessage(value)).toBe('發生未知錯誤，請再試一次。');
     }
+  });
+});
+
+describe('polish labels and model choices', () => {
+  it('explains each unavailability reason', () => {
+    expect(polishReasonLabel('not-installed')).toBe('找不到 oMLX，請先安裝並啟動 oMLX。');
+    expect(polishReasonLabel('unreachable')).toBe('oMLX 未啟動或無法連線。');
+    expect(polishReasonLabel('unauthorized')).toBe('oMLX 拒絕連線，請檢查 API 金鑰設定。');
+  });
+
+  it('orders installed recommendations, other installed models and the missing saved model', () => {
+    const models = ['Zebra', 'Qwen3.8-27B-oQ4e-mtp', 'Alpha', 'Qwen3.5-9B-4bit', 'Alpha'];
+    expect(polishModelOptions(models, 'missing')).toEqual([
+      { id: 'Qwen3.5-9B-4bit', label: 'Qwen3.5-9B-4bit · 快速（建議）' },
+      { id: 'Qwen3.8-27B-oQ4e-mtp', label: 'Qwen3.8-27B-oQ4e-mtp · 高品質' },
+      { id: 'Alpha', label: 'Alpha' }, { id: 'Zebra', label: 'Zebra' },
+      { id: 'missing', label: 'missing（未安裝）' },
+    ]);
+    expect(models).toHaveLength(5);
+  });
+
+  it('keeps missing recommendations selectable and does not duplicate an installed current model', () => {
+    expect(polishModelOptions([], 'Qwen3.5-9B-4bit')).toEqual([{ id: 'Qwen3.5-9B-4bit', label: 'Qwen3.5-9B-4bit（未安裝）' }]);
+    expect(polishModelOptions(['Alpha'], 'Alpha')).toEqual([{ id: 'Alpha', label: 'Alpha' }]);
+    expect(polishModelOptions([], '')).toEqual([]);
   });
 });

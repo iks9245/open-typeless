@@ -8,6 +8,7 @@ import { floatingWindow } from './main/windows';
 import { pushToTalkService } from './main/services';
 import { closeDatabase, initDatabase } from './main/db';
 import { historyService } from './main/services/history';
+import { polishService } from './main/services/polish';
 import { whisperServerService } from './main/services/whisper-server';
 
 const logger = log.scope('main');
@@ -103,6 +104,7 @@ app.on('ready', () => {
   // Start (or find) the local whisper.cpp server in the background; it reads its URL from
   // settings, so storage comes first. Never rejects; failures are logged.
   void whisperServerService.start();
+  polishService.startWarmups();
   createWindow();
 });
 
@@ -118,6 +120,7 @@ app.on('window-all-closed', () => {
 // Cleanup function for graceful shutdown
 function cleanup(): void {
   pushToTalkService.dispose();
+  polishService.dispose();
   floatingWindow.destroy();
   // Sends SIGTERM synchronously, only to a server this app started or adopted
   void whisperServerService.stop();

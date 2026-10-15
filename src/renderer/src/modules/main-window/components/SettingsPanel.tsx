@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSettings } from '../hooks/SettingsContext';
+import { usePolishStatus } from '../hooks/usePolishStatus';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useMounted } from '../hooks/useMounted';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
-import { serverModeLabel, serverStateLabel } from '../lib/format';
+import { polishModelOptions, polishReasonLabel, serverModeLabel, serverStateLabel } from '../lib/format';
 
 function SettingRow({ title, detail, children }: { title: string; detail?: string; children: ReactNode }) {
   return <div className="setting-row"><div><span className="setting-title">{title}</span>{detail && <p className="muted help">{detail}</p>}</div>{children}</div>;
@@ -13,6 +14,7 @@ export function SettingsPanel({ active }: { active: boolean }) {
   const { settings, loading, saving, update, report } = useSettings();
   const mounted = useMounted();
   const server = useServerStatus(active);
+  const polish = usePolishStatus(active);
   const [url, setUrl] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
   const urlBusy = useRef(false);
@@ -84,6 +86,25 @@ export function SettingsPanel({ active }: { active: boolean }) {
           </div>
         </div>
       </section>
+      <section className="settings-section" aria-labelledby="polish-heading"><h2 id="polish-heading">AI 潤稿</h2><div className="card">
+        <SettingRow title="AI 潤稿" detail="用本機 oMLX 模型刪除贅字、補上標點、修正口誤並轉成繁體中文，文字不會離開這台電腦。">
+          <input type="checkbox" role="switch" className="switch" aria-label="AI 潤稿" data-testid="settings-polish-enabled"
+            checked={settings?.polish.enabled ?? false} disabled={disabled || ((!polish.status?.available || Boolean(polish.error)) && !settings?.polish.enabled)}
+            onChange={(event) => { void update({ polish: { enabled: event.target.checked } }); }} />
+        </SettingRow>
+        <SettingRow title="潤稿模型">
+          <select aria-label="潤稿模型" data-testid="settings-polish-model" value={settings?.polish.model ?? ''}
+            disabled={disabled || !polish.status?.available || Boolean(polish.error)}
+            onChange={(event) => { void update({ polish: { model: event.target.value } }); }}>
+            {polishModelOptions(polish.status?.models ?? [], settings?.polish.model ?? '').map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </SettingRow>
+        <div className="server-status" data-testid="polish-status" role="status">
+          <div className="server-status-heading"><span className={`status-dot status-${polish.status?.available && !polish.error ? 'ready' : 'idle'}`} aria-hidden="true" />
+            <span>{polish.error ?? (polish.status ? (polish.status.available ? `已連線 oMLX · ${polish.status.models.length} 個模型` : polishReasonLabel(polish.status.reason)) : '正在讀取…')}</span>
+          </div>
+        </div>
+      </div><p className="muted help">啟用後每次聽寫約多等 0.5–2 秒；連不上 oMLX 或逾時時，會直接插入原始辨識文字。</p></section>
       <section className="settings-section" aria-labelledby="input-heading"><h2 id="input-heading">輸入</h2><div className="card">
         <SettingRow title="自動插入文字" detail="辨識完成後，將文字插入目前使用的應用程式。">
           <input type="checkbox" role="switch" className="switch" aria-label="自動插入文字" data-testid="settings-auto-insert"

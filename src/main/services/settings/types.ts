@@ -6,6 +6,7 @@
 import log from 'electron-log';
 import { z } from 'zod';
 import type { AppSettings, AppSettingsPatch } from '../../../shared/types/settings';
+import { DEFAULT_POLISH_MODEL } from '../../../shared/constants/polish';
 import { MAX_VOCABULARY_TERMS, MAX_VOCABULARY_TERM_LENGTH } from '../../../shared/lib/vocabulary-prompt';
 
 const logger = log.scope('settings:types');
@@ -40,17 +41,23 @@ const asrSchema = z.object({
 }).strict();
 
 const inputSchema = z.object({ autoInsert: z.boolean() }).strict();
+const polishSchema = z.object({
+  enabled: z.boolean(),
+  model: z.string().trim().min(1).max(200),
+}).strict();
 
 export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
   history: historySchema,
   asr: asrSchema,
   input: inputSchema,
+  polish: polishSchema,
 }).strict();
 
 export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
   history: historySchema.partial().optional(),
   asr: asrSchema.partial().optional(),
   input: inputSchema.partial().optional(),
+  polish: polishSchema.partial().optional(),
 }).strict();
 
 export const emptySettingsInputSchema = z.object({}).strict();
@@ -63,6 +70,8 @@ export const settingSchemas = {
   'asr.whisperServerUrl': asrSchema.shape.whisperServerUrl,
   'asr.vocabulary': asrSchema.shape.vocabulary,
   'input.autoInsert': inputSchema.shape.autoInsert,
+  'polish.enabled': polishSchema.shape.enabled,
+  'polish.model': polishSchema.shape.model,
 };
 
 export type SettingKey = keyof typeof settingSchemas;
@@ -81,6 +90,8 @@ export function applySetting(target: AppSettings, key: SettingKey, value: unknow
     case 'asr.whisperServerUrl': target.asr.whisperServerUrl = value as string; break;
     case 'asr.vocabulary': target.asr.vocabulary = value as string[]; break;
     case 'input.autoInsert': target.input.autoInsert = value as boolean; break;
+    case 'polish.enabled': target.polish.enabled = value as boolean; break;
+    case 'polish.model': target.polish.model = value as string; break;
   }
 }
 
@@ -97,5 +108,6 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
       vocabulary: [],
     },
     input: { autoInsert: true },
+    polish: { enabled: false, model: DEFAULT_POLISH_MODEL },
   };
 }

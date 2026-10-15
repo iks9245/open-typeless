@@ -4,6 +4,7 @@
  */
 
 export { IPC_CHANNELS } from './channels';
+export { DEFAULT_POLISH_MODEL, RECOMMENDED_POLISH_MODELS } from './polish';
 export {
   TRANSCRIPTION_STATUSES,
   TRANSCRIPTION_MODES,

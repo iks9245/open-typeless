@@ -61,6 +61,7 @@
     "electron-log": "^5.4.3",
     "electron-squirrel-startup": "^1.0.1",
     "https-proxy-agent": "^7.0.6",
+    "opencc-js": "^1.4.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "uiohook-napi": "^1.5.4",

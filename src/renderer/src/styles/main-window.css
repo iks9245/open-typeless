@@ -162,3 +162,8 @@ main { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
   .history-item-footer .inline-actions { align-self: flex-end; }
   .app-footer { padding-inline: 24px; }
 }
+
+.badge-polished { color: var(--accent); background: var(--accent-soft); }
+.history-raw { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+.history-raw summary { cursor: pointer; }
+.history-raw p { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

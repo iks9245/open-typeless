@@ -50,4 +50,8 @@ export const IPC_CHANNELS = {
     /** Read the local whisper.cpp server status (Renderer -> Main) */
     STATUS: 'whisper-server:status',
   },
+  POLISH: {
+    /** Read the local oMLX availability and models (Renderer -> Main) */
+    STATUS: 'polish:status',
+  },
 } as const;

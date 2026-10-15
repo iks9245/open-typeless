@@ -24,6 +24,7 @@ describe('settings', () => {
       history: { enabled: true, saveAudio: false, retentionDays: null },
       asr: { language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
       input: { autoInsert: true },
+      polish: { enabled: false, model: 'Qwen3.5-9B-4bit' },
     });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: defaults });
     expect(connection.db.select().from(settings).all()).toEqual([]);
@@ -44,12 +45,24 @@ describe('settings', () => {
       history: { enabled: false, saveAudio: true, retentionDays: 30 },
       asr: { language: null, whisperServerUrl: 'https://example.com/whisper', vocabulary: [] },
       input: { autoInsert: false },
+      polish: { enabled: true, model: 'custom-model' },
     };
     expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: patch });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: patch });
-    expect(connection.db.select().from(settings).all()).toHaveLength(7);
+    expect(connection.db.select().from(settings).all()).toHaveLength(9);
     expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.language'))
       .toEqual({ value: 'null', updated_at: now() });
+  });
+
+  it('defaults polish off and trims model overrides while preserving other settings', () => {
+    expect(getDefaultSettings({}).polish).toEqual({ enabled: false, model: 'Qwen3.5-9B-4bit' });
+    const result = updateSettings(connection.db, { polish: { enabled: true, model: '  local-model  ' } }, now, env);
+    expect(result).toEqual({ success: true, data: { ...getDefaultSettings(env), polish: { enabled: true, model: 'local-model' } } });
+    expect(getSettings(connection.db, env)).toEqual(result);
+    expect(connection.db.select().from(settings).all()).toHaveLength(2);
+    expect(updateSettings(connection.db, { polish: { enabled: false } }, now, env)).toEqual({
+      success: true, data: { ...getDefaultSettings(env), polish: { enabled: false, model: 'local-model' } },
+    });
   });
 
   it('updates only provided keys and persists a null retention override', () => {
@@ -65,6 +78,12 @@ describe('settings', () => {
   });
 
   it.each([
+    { polish: { enabled: 'yes' } },
+    { polish: { model: '' } },
+    { polish: { model: '  ' } },
+    { polish: { model: 'a'.repeat(201) } },
+    { polish: { model: 123 } },
+    { polish: { unknown: true } },
     { unknown: true },
     { history: { unknown: true } },
     { asr: { language: 123 } },

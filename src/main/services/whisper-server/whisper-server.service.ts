@@ -6,8 +6,10 @@
 import type { ChildProcess } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
+import nodePath from 'node:path';
 import { discoverWhisperServer, resolveWhisperEndpoint } from './lib/discovery';
-import { findOwnedWhisperProcess, removeWhisperPid, writeWhisperPid } from './lib/ownership';
+import { findOwnedWhisperProcess, modelFromCommand, removeWhisperPid, writeWhisperPid } from './lib/ownership';
+import { modelIdForPath } from './lib/models';
 import type { WhisperLaunchPlan, WhisperPidRecord, WhisperServerDependencies, WhisperServerStatus } from './types';
 
 interface OwnedProcess {
@@ -21,6 +23,7 @@ interface OwnedProcess {
 
 const INITIAL_STATUS: WhisperServerStatus = {
   mode: 'none', state: 'idle', pid: null, binary: null, model: null, vadModel: null, reason: null,
+  modelId: null, modelFallback: false, modelLocked: null,
 };
 
 export class WhisperServerService {
@@ -29,6 +32,8 @@ export class WhisperServerService {
   private generation = 0;
   private startTask: Promise<void> | null = null;
   private stopTask: Promise<void> | null = null;
+  private restartTask: Promise<void> | null = null;
+  private stopVersion = 0;
   private readonly cancellations = new Set<() => void>();
   private readonly listeners = new Set<() => void>();
   private readonly output: string[] = [];
@@ -38,6 +43,32 @@ export class WhisperServerService {
 
   status(): WhisperServerStatus {
     return { ...this.current };
+  }
+
+  /** Called by the settings subscription, including changes received during startup. */
+  modelChanged(): Promise<void> {
+    return this.current.mode === 'managed' || this.current.mode === 'adopted'
+      || (this.current.mode === 'none' && this.current.state === 'starting')
+      ? this.restart() : Promise.resolve();
+  }
+
+  restart(): Promise<void> {
+    const stopVersion = this.stopVersion;
+    // Serialize changes received while an earlier restart is loading a model.
+    if (this.restartTask !== null) return this.restartTask.then(() => {
+      if (stopVersion === this.stopVersion) return this.restart();
+    });
+    const stopped = this.stopServer();
+    const generation = this.generation;
+    this.update({ state: 'starting', reason: null });
+    const task = stopped.then(async () => {
+      if (generation !== this.generation || stopVersion !== this.stopVersion) return;
+      this.update({ state: 'idle' });
+      await this.start();
+    });
+    this.restartTask = task;
+    void task.then(() => { if (this.restartTask === task) this.restartTask = null; });
+    return task;
   }
 
   start(): Promise<void> {
@@ -79,6 +110,13 @@ export class WhisperServerService {
 
   /** Signal synchronously so Electron's before-quit caller need not await to send SIGTERM. */
   stop(): Promise<void> {
+    ++this.stopVersion;
+    const task = this.stopServer();
+    if (this.restartTask !== null && this.current.state === 'starting') this.update({ state: 'stopped', reason: null });
+    return task;
+  }
+
+  private stopServer(): Promise<void> {
     if (this.stopTask !== null) return this.stopTask;
     const owned = this.owned;
     if (owned === null && this.current.state !== 'starting') return Promise.resolve();
@@ -89,12 +127,7 @@ export class WhisperServerService {
     const starting = this.startTask;
     const task = (async (): Promise<void> => {
       if (owned !== null) {
-        const deadline = this.deps.now() + 3000;
-        while (this.isAlive(owned) && this.deps.now() < deadline) {
-          await new Promise<void>(resolve => this.deps.timers.setTimeout(resolve, 100));
-        }
-        if (this.isAlive(owned)) this.signal(owned, 'SIGKILL');
-        await this.removePid(owned);
+        await this.finishStop(owned);
       }
       // A pending ownership lookup or PID write must finish before a subsequent start.
       await starting;
@@ -117,19 +150,33 @@ export class WhisperServerService {
     const serverUrl = this.deps.getServerUrl();
     const endpoint = resolveWhisperEndpoint(serverUrl);
     if (endpoint.local === false) {
-      this.update({ mode: 'external', state: 'ready' });
+      this.update({ mode: 'external', state: 'ready', modelLocked: 'external' });
       return;
     }
-    const discovery = discoverWhisperServer(serverUrl, this.deps.discovery);
+    const discovery = discoverWhisperServer(serverUrl, this.deps.discovery, this.deps.getModel());
+    const modelStatus = discovery.available === true ? discovery.plan : discovery;
+    this.update({ modelFallback: modelStatus.modelFallback ?? false, modelLocked: this.deps.discovery.env.WHISPER_MODEL_PATH ? 'env' : null });
+    if (modelStatus.modelFallback) this.deps.logger.warn('Selected whisper model is missing or invalid; using automatic selection');
     const path = this.deps.pidFilePath();
     const record = await findOwnedWhisperProcess(path, endpoint.port, this.deps.ownership);
     if (generation !== this.generation) return;
     if (record !== null) {
       const owned: OwnedProcess = { record, path, child: null, exited: false, written: Promise.resolve(), removal: null };
       this.owned = owned;
+      let model: string | null = null;
+      try { model = modelFromCommand(await this.deps.ownership.commandOf(record.pid)); } catch { /* Model unknown. */ }
+      if (!this.active(owned, generation)) return;
+      if (discovery.available === true && (model === null || nodePath.resolve(model) !== nodePath.resolve(discovery.plan.model))) {
+        this.signal(owned, 'SIGTERM');
+        await this.finishStop(owned);
+        if (!this.active(owned, generation)) return;
+        this.owned = null;
+        await this.launch(discovery.plan, endpoint.managedUrl, path, generation);
+        return;
+      }
       this.update({
         mode: 'adopted', pid: record.pid, binary: record.binary,
-        model: discovery.available === true ? discovery.plan.model : null,
+        model, modelId: model === null ? null : modelIdForPath(model, this.deps.discovery),
         vadModel: discovery.available === true ? discovery.plan.vadModel : null,
       });
       await this.pollReady(owned, endpoint.managedUrl, generation);
@@ -145,7 +192,7 @@ export class WhisperServerService {
     const healthy = await Promise.all(urls.map(url => this.checkHealth(url, 1000)));
     if (generation !== this.generation) return;
     if (healthy.some(Boolean)) {
-      this.update({ mode: 'external', state: 'ready' });
+      this.update({ mode: 'external', state: 'ready', modelLocked: 'external', modelFallback: false });
       return;
     }
     if (discovery.available === false) {
@@ -158,7 +205,10 @@ export class WhisperServerService {
 
   private async launch(plan: WhisperLaunchPlan, url: string, path: string, generation: number): Promise<void> {
     if (generation !== this.generation) return;
-    this.update({ mode: 'managed', state: 'starting', binary: plan.binary, model: plan.model, vadModel: plan.vadModel, reason: null });
+    this.update({
+      mode: 'managed', state: 'starting', binary: plan.binary, model: plan.model, vadModel: plan.vadModel, reason: null,
+      modelId: plan.modelId, modelFallback: plan.modelFallback, modelLocked: plan.modelLocked,
+    });
     const child = this.deps.spawn(plan.binary, plan.args, { stdio: ['ignore', 'pipe', 'pipe'] });
     child.on('error', error => {
       if (generation === this.generation) this.fail('whisper-server process error', error);
@@ -317,6 +367,15 @@ export class WhisperServerService {
     } catch (error) {
       this.deps.logger.warn('Failed to signal whisper-server', { pid: owned.record.pid, signal, error });
     }
+  }
+
+  private async finishStop(owned: OwnedProcess): Promise<void> {
+    const deadline = this.deps.now() + 3000;
+    while (this.isAlive(owned) && this.deps.now() < deadline) {
+      await new Promise<void>(resolve => this.deps.timers.setTimeout(resolve, 100));
+    }
+    if (this.isAlive(owned)) this.signal(owned, 'SIGKILL');
+    await this.removePid(owned);
   }
 
   private removePid(owned: OwnedProcess): Promise<void> {

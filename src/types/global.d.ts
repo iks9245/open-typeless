@@ -12,7 +12,7 @@ import type { IpcResult } from '../shared/types/common';
 import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from '../shared/types/history';
 import type { PolishInfo } from '../shared/types/polish';
 import type { AppSettings, AppSettingsPatch } from '../shared/types/settings';
-import type { WhisperServerInfo } from '../shared/types/whisper-server';
+import type { WhisperModelInfo, WhisperServerInfo } from '../shared/types/whisper-server';
 
 /**
  * ASR API interface exposed via contextBridge.
@@ -125,6 +125,8 @@ interface WhisperServerApi {
    * Read the local whisper.cpp server status (file names only, no paths).
    */
   getStatus: () => Promise<IpcResult<WhisperServerInfo>>;
+  listModels: () => Promise<IpcResult<WhisperModelInfo[]>>;
+  openModelsFolder: () => Promise<IpcResult<void>>;
 }
 
 /**

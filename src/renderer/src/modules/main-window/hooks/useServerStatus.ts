@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { WhisperServerInfo } from '../../../../../shared/types/whisper-server';
+import type { WhisperModelInfo, WhisperServerInfo } from '../../../../../shared/types/whisper-server';
 import { errorMessage } from '../lib/format';
 
-export function useServerStatus(active: boolean) {
+export function useServerStatus(active: boolean, model: string | null | undefined) {
   const [status, setStatus] = useState<WhisperServerInfo | null>(null);
+  const [models, setModels] = useState<WhisperModelInfo[]>([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -16,8 +18,12 @@ export function useServerStatus(active: boolean) {
       busy = true;
       setPending(true);
       try {
-        const result = await window.api.whisperServer.getStatus();
+        const [result, catalog] = await Promise.all([
+          window.api.whisperServer.getStatus(), window.api.whisperServer.listModels(),
+        ]);
         if (cancelled) return;
+        if (catalog.success === true) { setModels(catalog.data); setModelsError(null); }
+        else setModelsError('無法讀取辨識模型');
         if (!result.success) throw new Error(result.error);
         setStatus(result.data);
         setError(null);
@@ -37,7 +43,7 @@ export function useServerStatus(active: boolean) {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [active]);
+  }, [active, model]);
 
-  return { status, error, pending };
+  return { status, models, modelsError, error, pending };
 }

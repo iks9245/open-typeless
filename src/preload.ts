@@ -17,7 +17,7 @@ import type { PolishInfo } from './shared/types/polish';
 import type { IpcResult } from './shared/types/common';
 import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from './shared/types/history';
 import type { AppSettings, AppSettingsPatch } from './shared/types/settings';
-import type { WhisperServerInfo } from './shared/types/whisper-server';
+import type { WhisperModelInfo, WhisperServerInfo } from './shared/types/whisper-server';
 
 /**
  * ASR API exposed to the renderer process.
@@ -123,6 +123,10 @@ const whisperServerApi = {
    */
   getStatus: (): Promise<IpcResult<WhisperServerInfo>> =>
     ipcRenderer.invoke(IPC_CHANNELS.WHISPER_SERVER.STATUS),
+  listModels: (): Promise<IpcResult<WhisperModelInfo[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WHISPER_SERVER.MODELS),
+  openModelsFolder: (): Promise<IpcResult<void>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WHISPER_SERVER.OPEN_MODELS_FOLDER),
 };
 
 const polishApi = {

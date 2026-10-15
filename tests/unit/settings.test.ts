@@ -23,7 +23,7 @@ describe('settings', () => {
     expect(defaults).toEqual({
       memory: { enabled: true },
       history: { enabled: true, saveAudio: false, retentionDays: null },
-      asr: { language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
+      asr: { model: null, language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
       input: { autoInsert: true, triggerKey: 'right-option' },
       polish: { enabled: false, model: 'Qwen3.5-9B-4bit', style: 'auto' },
       command: { enabled: true, model: 'Qwen3.8-27B-oQ4e-mtp' },
@@ -33,7 +33,7 @@ describe('settings', () => {
   });
 
   it('uses built-in defaults when environment values are absent', () => {
-    expect(getDefaultSettings({}).asr).toEqual({ language: null, whisperServerUrl: 'http://localhost:8080', vocabulary: [] });
+    expect(getDefaultSettings({}).asr).toEqual({ model: null, language: null, whisperServerUrl: 'http://localhost:8080', vocabulary: [] });
   });
 
   it.each(['not a URL', 'ftp://localhost:9000', ''])('falls back to localhost:8080 for invalid environment URL %j', (url) => {
@@ -46,14 +46,14 @@ describe('settings', () => {
     const patch = {
       memory: { enabled: false },
       history: { enabled: false, saveAudio: true, retentionDays: 30 },
-      asr: { language: null, whisperServerUrl: 'https://example.com/whisper', vocabulary: [] },
+      asr: { model: null, language: null, whisperServerUrl: 'https://example.com/whisper', vocabulary: [] },
       input: { autoInsert: false, triggerKey: 'right-command' },
       polish: { enabled: true, model: 'custom-model', style: 'auto' },
       command: { enabled: false, model: 'custom-command' },
     };
     expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: patch });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: patch });
-    expect(connection.db.select().from(settings).all()).toHaveLength(14);
+    expect(connection.db.select().from(settings).all()).toHaveLength(15);
     expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.language'))
       .toEqual({ value: 'null', updated_at: now() });
   });
@@ -103,6 +103,23 @@ describe('settings', () => {
       success: true, data: { ...getDefaultSettings(env), command: { enabled: false, model: 'command-model' } },
     });
     expect(connection.db.select().from(settings).all().map(row => row.key).sort()).toEqual(['command.enabled', 'command.model']);
+  });
+
+  it.each(['app/ggml-large-v3-cantonese-q8_0.bin', 'whisper.cpp/ggml-base.bin', null])('persists ASR model %j independently of language and vocabulary', model => {
+    const result = updateSettings(connection.db, { asr: { model } }, now, env);
+    expect(result).toEqual({ success: true, data: { ...getDefaultSettings(env), asr: { ...getDefaultSettings(env).asr, model } } });
+    expect(getSettings(connection.db, env)).toEqual(result);
+    expect(connection.sqlite.prepare('SELECT value FROM settings WHERE key = ?').get('asr.model')).toEqual({ value: JSON.stringify(model) });
+  });
+
+  it.each(['', '/tmp/model.bin', 'other/model.bin', 'app/../model.bin', 'app/a\\b.bin', 'app/model.txt', 123])('rejects ASR model id %j atomically', model => {
+    expect(updateSettings(connection.db, { asr: { model }, input: { autoInsert: false } }, now, env).success).toBe(false);
+    expect(connection.db.select().from(settings).all()).toEqual([]);
+  });
+
+  it('ignores an invalid stored model id for existing installations', () => {
+    connection.sqlite.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)').run('asr.model', JSON.stringify('/tmp/model.bin'), now());
+    expect(getSettings(connection.db, env)).toEqual({ success: true, data: getDefaultSettings(env) });
   });
 
   it('updates only provided keys and persists a null retention override', () => {

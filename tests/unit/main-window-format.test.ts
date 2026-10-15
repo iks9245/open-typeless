@@ -1,6 +1,6 @@
 import { getDefaultSettings } from '../../src/main/services/settings/types';
 import { describe, expect, it } from 'vitest';
-import { formatReportDuration, formatReportNumber, polishStyleModelHint, polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
+import { formatModelSize, modelLockReason, formatReportDuration, formatReportNumber, polishStyleModelHint, polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
 
 describe('history time formatting', () => {
   const now = new Date(2026, 9, 15, 12, 0);
@@ -63,7 +63,7 @@ describe('server labels and unexpected errors', () => {
     const modes = ['managed', 'adopted', 'external', 'unavailable', 'none'] as const;
     const states = ['idle', 'starting', 'ready', 'stopped', 'failed'] as const;
     expect(modes.map(serverModeLabel)).toEqual(['由 app 管理', '沿用先前的程序', '外部伺服器', '找不到 whisper', '尚未偵測']);
-    expect(states.map(serverStateLabel)).toEqual(['尚未啟動', '啟動中', '就緒', '已停止', '失敗']);
+    expect(states.map(serverStateLabel)).toEqual(['尚未啟動', '正在載入模型…', '就緒', '已停止', '失敗']);
   });
 
   it('keeps IPC/exception details and provides a fallback for unknown rejections', () => {
@@ -132,5 +132,19 @@ describe('report formatting', () => {
     expect(formatReportNumber(12345)).toBe('12,345');
     expect(formatReportNumber(123.8)).toBe('124');
     expect(formatReportNumber(NaN)).toBe('—');
+  });
+});
+
+
+describe('ASR model labels', () => {
+  it('shows model sizes in MB and GB', () => {
+    expect(formatModelSize(512 * 1024 ** 2)).toBe('512.0 MB');
+    expect(formatModelSize(1.5 * 1024 ** 3)).toBe('1.5 GB');
+  });
+
+  it('explains environment and external locks', () => {
+    expect(modelLockReason('env')).toBe('已由 WHISPER_MODEL_PATH 指定');
+    expect(modelLockReason('external')).toBe('伺服器不是由 app 啟動，無法切換模型');
+    expect(modelLockReason(null)).toBeUndefined();
   });
 });

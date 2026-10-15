@@ -10,6 +10,7 @@ import { TRIGGER_KEYS, type TriggerKeyId } from '../../../shared/constants/keybo
 import { DEFAULT_COMMAND_MODEL } from '../../../shared/constants/command';
 import { DEFAULT_POLISH_MODEL } from '../../../shared/constants/polish';
 import { MAX_VOCABULARY_TERMS, MAX_VOCABULARY_TERM_LENGTH } from '../../../shared/lib/vocabulary-prompt';
+import { WHISPER_MODEL_ID_PATTERN } from '../whisper-server/lib/models';
 
 const logger = log.scope('settings:types');
 
@@ -34,6 +35,7 @@ const historySchema = z.object({
 export { MAX_VOCABULARY_TERMS, MAX_VOCABULARY_TERM_LENGTH };
 
 const asrSchema = z.object({
+  model: z.string().regex(WHISPER_MODEL_ID_PATTERN).nullable(),
   language: z.string().nullable(),
   whisperServerUrl: z.string().url().refine(
     (value) => /^https?:\/\//i.test(value),
@@ -81,6 +83,7 @@ export const settingSchemas = {
   'history.saveAudio': historySchema.shape.saveAudio,
   'history.retentionDays': historySchema.shape.retentionDays,
   'asr.language': asrSchema.shape.language,
+  'asr.model': asrSchema.shape.model,
   'asr.whisperServerUrl': asrSchema.shape.whisperServerUrl,
   'asr.vocabulary': asrSchema.shape.vocabulary,
   'input.autoInsert': inputSchema.shape.autoInsert,
@@ -106,6 +109,7 @@ export function applySetting(target: AppSettings, key: SettingKey, value: unknow
     case 'history.saveAudio': target.history.saveAudio = value as boolean; break;
     case 'history.retentionDays': target.history.retentionDays = value as number | null; break;
     case 'asr.language': target.asr.language = value as string | null; break;
+    case 'asr.model': target.asr.model = value as string | null; break;
     case 'asr.whisperServerUrl': target.asr.whisperServerUrl = value as string; break;
     case 'asr.vocabulary': target.asr.vocabulary = value as string[]; break;
     case 'input.autoInsert': target.input.autoInsert = value as boolean; break;
@@ -127,6 +131,7 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
     memory: { enabled: true },
     history: { enabled: true, saveAudio: false, retentionDays: null },
     asr: {
+      model: null,
       language: env.WHISPER_LANGUAGE ?? null,
       whisperServerUrl: url.success === true ? url.data : 'http://localhost:8080',
       vocabulary: [],

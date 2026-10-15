@@ -12,7 +12,12 @@ describe('whisper discovery', () => {
 
   function dependencies(files: string[], env: WhisperDiscoveryInputs['env'] = {}, names: string[] = []): WhisperDiscoveryInputs {
     const existing = new Set(files);
-    return { env, homedir: () => home, fileExists: (file) => existing.has(file), readDirectory: () => names };
+    return {
+      env, homedir: () => home, userData: () => '/fake/app',
+      fileExists: file => existing.has(file), readDirectory: () => names,
+      statFile: file => ({ isFile: () => existing.has(file), size: 100 }),
+      readHeader: () => Buffer.from('lmgg'),
+    };
   }
 
   function plan(deps: WhisperDiscoveryInputs, url = 'http://localhost:8080'): WhisperLaunchPlan {
@@ -39,6 +44,39 @@ describe('whisper discovery', () => {
   it('falls back to discovered files when environment overrides do not exist', () => {
     const deps = dependencies([binaries[1], modelPaths[0]], { WHISPER_SERVER_BIN: '/missing/binary', WHISPER_MODEL_PATH: '/missing/model' });
     expect(plan(deps)).toMatchObject({ binary: binaries[1], model: modelPaths[0] });
+  });
+
+  it('uses a validated selected model ahead of automatic discovery and below the environment', () => {
+    const selected = '/fake/app/models/ggml-cantonese.bin';
+    const deps = dependencies([binaries[1], selected, ...modelPaths]);
+    expect(discoverWhisperServer('http://localhost:8080', deps, 'app/ggml-cantonese.bin')).toMatchObject({
+      available: true, plan: { model: selected, modelId: 'app/ggml-cantonese.bin', modelFallback: false, modelLocked: null },
+    });
+    deps.env.WHISPER_MODEL_PATH = modelPaths[1];
+    expect(discoverWhisperServer('http://localhost:8080', deps, 'app/ggml-cantonese.bin')).toMatchObject({
+      available: true, plan: { model: modelPaths[1], modelId: 'whisper.cpp/ggml-large-v3.bin', modelFallback: false, modelLocked: 'env' },
+    });
+  });
+
+  it.each(['missing', 'bad magic', 'directory', 'unreadable', 'invalid id'])('falls back to automatic for a selection with %s', failure => {
+    const selected = '/fake/app/models/custom.bin';
+    const deps = dependencies([binaries[1], ...modelPaths, ...(failure === 'missing' ? [] : [selected])]);
+    if (failure === 'bad magic') deps.readHeader = () => Buffer.from('nope');
+    if (failure === 'directory') deps.statFile = () => ({ isFile: () => false, size: 100 });
+    if (failure === 'unreadable') deps.readHeader = () => { throw new Error('denied'); };
+    expect(discoverWhisperServer('http://localhost:8080', deps, failure === 'invalid id' ? '../custom.bin' : 'app/custom.bin')).toMatchObject({
+      available: true, plan: { model: modelPaths[0], modelFallback: true, modelLocked: null },
+    });
+  });
+
+  it('resolves a whisper.cpp selection and keeps automatic selection unchanged for null', () => {
+    const deps = dependencies([binaries[1], ...modelPaths]);
+    expect(discoverWhisperServer('http://localhost:8080', deps, 'whisper.cpp/ggml-small.bin')).toMatchObject({
+      available: true, plan: { model: modelPaths[3], modelFallback: false },
+    });
+    expect(discoverWhisperServer('http://localhost:8080', deps, null)).toMatchObject({
+      available: true, plan: { model: modelPaths[0], modelFallback: false },
+    });
   });
 
   it('reports a missing binary before attempting model discovery', () => {

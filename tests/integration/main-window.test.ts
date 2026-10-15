@@ -4,7 +4,8 @@
  */
 
 import path from 'node:path';
-import { BrowserWindow, clipboard, nativeTheme } from 'electron';
+import { app, BrowserWindow, clipboard, nativeTheme } from 'electron';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { count } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { assert, run, test, until, wait } from './harness';
@@ -49,6 +50,15 @@ run(async () => {
     return result.data;
   };
 
+  // userData is isolated by the integration harness; never write to the real models folder.
+  const modelsFolder = path.join(app.getPath('userData'), 'models');
+  mkdirSync(modelsFolder, { recursive: true });
+  const cantoneseModel = 'ggml-large-v3-cantonese-q8_0.bin';
+  const baseModel = 'ggml-ui-base.bin';
+  for (const name of [cantoneseModel, baseModel]) {
+    writeFileSync(path.join(modelsFolder, name), Buffer.concat([Buffer.from('lmgg'), Buffer.alloc(512)]));
+  }
+  writeFileSync(path.join(modelsFolder, 'not-ggml.bin'), 'not a model');
   const ui = await openMainWindow();
   // Screenshots named *-light/*-dark must not depend on the system appearance
   nativeTheme.themeSource = 'light';
@@ -211,6 +221,37 @@ run(async () => {
     settingsService.update({ input: { autoInsert } });
     await until('the toggle to follow settings.onChanged', async () => (await ui.checked('settings-auto-insert')) === autoInsert);
     await ui.screenshot('3-settings-light');
+  });
+
+  await test('model catalog lists ggml files, saves a selection and shows Cantonese guidance', async () => {
+    const previous = settings();
+    try {
+      await ui.click('tab-settings');
+      await ui.waitUntil('app model catalog', `document.querySelector('[data-testid="settings-asr-model"]').textContent.includes('${cantoneseModel}')`);
+      const options = await ui.exec<{ value: string; label: string }[]>(`[...document.querySelector('[data-testid="settings-asr-model"]').options].map(option => ({ value: option.value, label: option.textContent }))`);
+      assert(options[0].value === '' && options[0].label.includes('自動（目前：'), 'automatic option first', options);
+      assert(options.some(option => option.value === 'app/' + baseModel && option.label.includes('MB') && option.label.includes('app')), 'source, name and size shown', options);
+      assert(!options.some(option => option.label.includes('not-ggml.bin')), 'non-ggml file excluded', options);
+      assert(await ui.count('settings-open-models-folder') === 1, 'models folder button shown');
+      const catalog = await ui.exec<{ success: boolean; data: unknown[] }>('window.api.whisperServer.listModels()');
+      assert(catalog.success && !JSON.stringify(catalog.data).includes(modelsFolder), 'catalog exposes no absolute paths', catalog);
+      settingsService.update({ asr: { language: 'yue' }, polish: { style: 'auto' } });
+      await ui.waitUntil('language change received', `document.querySelector('[data-testid="settings-language"]').value === 'yue' && !document.querySelector('[data-testid="settings-asr-model"]').disabled`);
+      await ui.select('settings-asr-model', 'app/' + cantoneseModel);
+      await until('ASR model saved', () => settings().asr.model === 'app/' + cantoneseModel);
+      await ui.waitFor('asr-model-language-hint');
+      await ui.waitFor('asr-model-polish-hint');
+      assert((await ui.text('asr-model-language-hint')).includes('自動偵測'), 'language guidance shown');
+      assert((await ui.text('asr-model-polish-hint')).includes('一般'), 'polish guidance shown');
+      settingsService.update({ asr: { language: null }, polish: { style: 'standard' } });
+      await ui.waitFor('asr-model-language-hint', { count: 0 });
+      await ui.waitFor('asr-model-polish-hint', { count: 0 });
+      await ui.waitUntil('model save finished', `!document.querySelector('[data-testid="settings-asr-model"]').disabled`);
+      await ui.select('settings-asr-model', '');
+      await until('automatic model saved', () => settings().asr.model === null);
+    } finally {
+      settingsService.update({ asr: previous.asr, polish: previous.polish });
+    }
   });
 
   await test('trigger choices save and update footer and command help labels', async () => {

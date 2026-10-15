@@ -48,6 +48,8 @@ export const IPC_CHANNELS = {
   WHISPER_SERVER: {
     /** Read the local whisper.cpp server status (Renderer -> Main) */
     STATUS: 'whisper-server:status',
+    MODELS: 'whisper-server:models',
+    OPEN_MODELS_FOLDER: 'whisper-server:open-models-folder',
   },
   REPORT: { GET: 'report:get', COMMENT: 'report:comment' },
   POLISH: {

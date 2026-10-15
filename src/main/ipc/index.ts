@@ -3,6 +3,7 @@
  * Central place to register all IPC handlers.
  */
 
+import { setupReportHandlers } from './report.handler';
 import { setupSystemHandlers } from './system.handler';
 import { setupPolishHandlers } from './polish.handler';
 import { setupASRHandlers } from './asr.handler';
@@ -19,6 +20,7 @@ export function setupAllIpcHandlers(): void {
   setupASRHandlers();
   setupSystemHandlers();
   setupPolishHandlers();
+  setupReportHandlers();
   setupFloatingWindowHandlers();
   setupHistoryHandlers();
   setupSettingsHandlers();

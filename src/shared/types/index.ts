@@ -20,3 +20,5 @@ export type {
   ListHistoryResult,
   HistoryChange,
 } from './history';
+
+export type { ReportRange, ReportInput, ReportTotals, FillerCount, WordCount, SpeechReport, ReportComment } from './report';

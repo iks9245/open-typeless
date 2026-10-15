@@ -10,6 +10,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from './shared/constants/channels';
 import { asrEvents } from './preload-asr';
 import type { LoginItemState } from './shared/types/system';
+import type { ReportInput, SpeechReport } from './shared/types/report';
 import type { AppApi } from './types/global';
 import type { PolishInfo } from './shared/types/polish';
 import type { IpcResult } from './shared/types/common';
@@ -140,4 +141,8 @@ contextBridge.exposeInMainWorld('api', {
   settings: settingsApi,
   whisperServer: whisperServerApi,
   polish: polishApi,
+  report: {
+    get: (input: ReportInput): Promise<IpcResult<SpeechReport>> => ipcRenderer.invoke(IPC_CHANNELS.REPORT.GET, input),
+    comment: (input: ReportInput): Promise<IpcResult<{ text: string }>> => ipcRenderer.invoke(IPC_CHANNELS.REPORT.COMMENT, input),
+  },
 } satisfies AppApi);

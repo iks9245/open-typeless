@@ -10,17 +10,17 @@ import { count, eq, inArray } from 'drizzle-orm';
 import { TMP_DIR, assert, run, silenceChunk, startFakeOmlx, startFakeWhisper, writeOmlxSettings, test, toneChunk, unusedUrl, until, wait } from './harness';
 
 interface PushToTalkInternals {
-  handleKeyDown(mode?: 'dictation' | 'command'): Promise<void>;
+  handleKeyDown(mode?: 'dictation' | 'command' | 'ask'): Promise<void>;
   handleKeyUp(): Promise<void>;
   isActive: boolean;
 }
 
 interface KeyboardInternals {
   config: { triggerKey: number; minRecordingMs: number };
-  onKeyDown: ((mode: 'dictation' | 'command') => void) | null;
+  onKeyDown: ((mode: 'dictation' | 'command' | 'ask') => void) | null;
   onKeyUp: (() => void) | null;
   onCancel: ((durationMs: number) => void) | null;
-  handleKeyDown(keycode: number, modifiers?: { shift?: boolean }): void;
+  handleKeyDown(keycode: number, modifiers?: { shift?: boolean; ctrl?: boolean }): void;
   handleKeyUp(keycode: number): void;
 }
 
@@ -434,6 +434,74 @@ run(async () => {
     const row = latest();
     assert(row.status === 'failed' && row.errorCode === 'start_failed', 'row start_failed', row);
     assert(!ptt.isActive, 'push-to-talk reset');
+  });
+
+  await test('Control + trigger asks memory, emits the answer, inserts nothing and stores no session', async () => {
+    const { memoryIndexer, memoryService } = await import('../../src/main/services/memory');
+    const { setupMemoryHandlers } = await import('../../src/main/ipc/memory.handler');
+    const { registerTrustedWindow } = await import('../../src/main/ipc/sender');
+    const { UiohookKey } = await import('uiohook-napi');
+    const omlx = await startFakeOmlx();
+    const main = new BrowserWindow({ show: false });
+    const { historyEmbeddings } = await import('../../src/main/db');
+    const sent: Array<{ channel: string; value: unknown }> = [];
+    const modes: string[] = [];
+    const results: string[] = [];
+    const originalShow = floatingWindow.show;
+    // This scenario spies on floating messages without loading another renderer.
+    floatingWindow.show = () => undefined;
+    const originalMode = floatingWindow.sendMode;
+    const originalResult = floatingWindow.sendResult;
+    const originalSend = main.webContents.send.bind(main.webContents);
+    floatingWindow.sendMode = mode => { modes.push(mode); originalMode.call(floatingWindow, mode); };
+    floatingWindow.sendResult = result => { results.push(result.text); originalResult.call(floatingWindow, result); };
+    main.webContents.send = (channel, value) => { sent.push({ channel, value }); originalSend(channel, value); };
+    try {
+      await main.loadURL('about:blank');
+      registerTrustedWindow(main.webContents, 'main');
+      // Registration pins the loaded page before any event is sent.
+      await main.loadURL('data:text/html,<html></html>');
+      setupMemoryHandlers();
+      await writeOmlxSettings(omlx.port, null);
+      const id = historyService.begin({ engine: 'whisper.cpp' });
+      assert(id, 'source created');
+      await historyService.complete(id, { rawText: 'Ken 報價五萬元', finalText: 'Ken 報價五萬元',
+        audioDurationMs: 1000, latencyMs: 100, detectedLanguage: null });
+      memoryIndexer.start();
+      await memoryIndexer.run();
+      await until('memory indexed', () => memoryIndexer.status().indexed === memoryIndexer.status().total);
+      omlx.reply = 'Ken 的報價是五萬元。[1]';
+      whisper.text = 'Ken 的報價是多少？';
+      const before = { rows: rowCount(), inserted: inserted.length };
+      await withKeyboardCallbacks(async () => {
+        keyboard.handleKeyDown(UiohookKey.Ctrl);
+        keyboard.handleKeyDown(keyboard.config.triggerKey, { ctrl: true, shift: true });
+        await until('ask listening', () => asrService.currentStatus === 'listening');
+        asrService.processAudioChunk(toneChunk());
+        await wait(300);
+        keyboard.handleKeyUp(keyboard.config.triggerKey);
+        keyboard.handleKeyUp(UiohookKey.Ctrl);
+        await until('answer emitted', () => sent.some(event => event.channel === 'ask:answered'));
+      });
+      assert(modes.includes('ask'), 'floating ask label sent', modes);
+      assert(results.includes('Ken 的報價是五萬元。[1]'), 'floating answer sent', results);
+      assert(inserted.length === before.inserted, 'nothing inserted');
+      assert(rowCount() === before.rows, 'question is not history');
+      assert(memoryService.history()[0].sources[0]?.cited, 'full answer available in main memory history');
+      assert(getDb().select().from(historyEmbeddings).all().some(row => row.transcriptionId === id), 'vectors exist');
+      await historyService.delete({ id });
+      assert(!getDb().select().from(historyEmbeddings).all().some(row => row.transcriptionId === id), 'history delete cascades vectors');
+    } finally {
+      floatingWindow.show = originalShow;
+      floatingWindow.sendMode = originalMode;
+      floatingWindow.sendResult = originalResult;
+      floatingWindow.hide();
+      memoryIndexer.stop();
+      main.destroy();
+      whisper.text = '你好世界';
+      await writeOmlxSettings(null, null);
+      await omlx.close();
+    }
   });
 
   await test('a short key press is cancelled: no transcription, no insertion, no row', async () => {

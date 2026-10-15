@@ -23,6 +23,8 @@ export interface SettingsService {
   off(event: 'changed', listener: (settings: AppSettings) => void): SettingsService;
 }
 
+const memorySchema = z.object({ enabled: z.boolean() }).strict();
+
 const historySchema = z.object({
   enabled: z.boolean(),
   saveAudio: z.boolean(),
@@ -52,6 +54,7 @@ const polishSchema = z.object({
 }).strict();
 
 export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
+  memory: memorySchema,
   history: historySchema,
   asr: asrSchema,
   input: inputSchema,
@@ -60,6 +63,7 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
 }).strict();
 
 export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
+  memory: memorySchema.partial().optional(),
   history: historySchema.partial().optional(),
   asr: asrSchema.partial().optional(),
   input: inputSchema.partial().optional(),
@@ -70,6 +74,7 @@ export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
 export const emptySettingsInputSchema = z.object({}).strict();
 
 export const settingSchemas = {
+  'memory.enabled': memorySchema.shape.enabled,
   'history.enabled': historySchema.shape.enabled,
   'history.saveAudio': historySchema.shape.saveAudio,
   'history.retentionDays': historySchema.shape.retentionDays,
@@ -93,6 +98,7 @@ export function isSettingKey(key: string): key is SettingKey {
 export function applySetting(target: AppSettings, key: SettingKey, value: unknown): void {
   // Values have already been checked with the matching dotted-key schema.
   switch (key) {
+    case 'memory.enabled': target.memory.enabled = value as boolean; break;
     case 'history.enabled': target.history.enabled = value as boolean; break;
     case 'history.saveAudio': target.history.saveAudio = value as boolean; break;
     case 'history.retentionDays': target.history.retentionDays = value as number | null; break;
@@ -114,6 +120,7 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
     logger.warn('Ignoring invalid WHISPER_SERVER_URL', { error: url.error.issues[0].message });
   }
   return {
+    memory: { enabled: true },
     history: { enabled: true, saveAudio: false, retentionDays: null },
     asr: {
       language: env.WHISPER_LANGUAGE ?? null,

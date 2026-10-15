@@ -1,3 +1,4 @@
+import type { AskResult, AskEntry, MemoryStatus } from '../shared/types/memory';
 /**
  * Global type declarations for the Electron application.
  * Extends the Window interface with the exposed API.
@@ -49,6 +50,7 @@ interface ASRApi {
  * Floating Window API interface exposed via contextBridge.
  */
 interface FloatingWindowApi {
+  onAnswer: (callback: (result: AskResult) => void) => () => void;
   onMode: (callback: (mode: InputMode) => void) => () => void;
   /**
    * Set content height for adaptive window sizing.
@@ -129,6 +131,13 @@ interface WhisperServerApi {
  * Application API exposed to the renderer process.
  */
 export interface AppApi {
+  memory: {
+    ask: (input: { question: string }) => Promise<IpcResult<AskResult>>;
+    status: () => Promise<IpcResult<MemoryStatus>>;
+    reindex: () => Promise<IpcResult<void>>;
+    history: () => Promise<IpcResult<AskEntry[]>>;
+    onAnswered: (callback: (entry: AskEntry) => void) => () => void;
+  };
   system: {
     getLoginItem: () => Promise<IpcResult<LoginItemState>>;
     setLoginItem: (enabled: boolean) => Promise<IpcResult<LoginItemState>>;

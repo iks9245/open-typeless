@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('uiohook-napi', () => ({
-  UiohookKey: { Shift: 42, ShiftRight: 54, Alt: 56, AltRight: 3640, Ctrl: 29, CtrlRight: 3613, Meta: 3675, MetaRight: 3676, F13: 91, F14: 92, F15: 93 },
+  UiohookKey: { Escape: 1, Shift: 42, ShiftRight: 54, Alt: 56, AltRight: 3640, Ctrl: 29, CtrlRight: 3613, Meta: 3675, MetaRight: 3676, F13: 91, F14: 92, F15: 93 },
   uIOhook: { on: vi.fn(), off: vi.fn(), start: vi.fn(), stop: vi.fn() },
 }));
 vi.mock('../../src/main/services/permissions', () => ({ permissionsService: { getAccessibilityStatus: () => true } }));
@@ -11,7 +11,7 @@ import type { InputMode } from '../../src/shared/constants/command';
 
 interface Internals {
   config: { triggerKey: number };
-  handleKeyDown(keycode: number, modifiers?: { shift?: boolean }): void;
+  handleKeyDown(keycode: number, modifiers?: { shift?: boolean; ctrl?: boolean }): void;
   handleKeyUp(keycode: number): void;
 }
 function fixture() {
@@ -232,6 +232,46 @@ describe('configurable triggers and interruptions', () => {
       keyboard.handleKeyUp(code);
       expect(await service.waitForModifiersReleased(0)).toBe(true);
     }
+    service.unregister();
+  });
+});
+
+
+describe('ask mode and temporary Esc subscription', () => {
+  it.each([UiohookKey.Ctrl, UiohookKey.CtrlRight])('Control %s beats Shift at trigger down', ctrl => {
+    const { keyboard, service, down } = fixture();
+    keyboard.handleKeyDown(ctrl);
+    keyboard.handleKeyDown(UiohookKey.Shift);
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    expect(down).toHaveBeenCalledWith('ask');
+    service.unregister();
+  });
+  it('uses the event Control flag and excludes Control when it is the trigger', () => {
+    const { keyboard, service, down } = fixture();
+    keyboard.handleKeyDown(UiohookKey.AltRight, { shift: true, ctrl: true });
+    expect(down).toHaveBeenLastCalledWith('ask');
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    service.setTriggerKey(UiohookKey.CtrlRight);
+    keyboard.handleKeyDown(UiohookKey.CtrlRight, { ctrl: true });
+    expect(down).toHaveBeenLastCalledWith('dictation');
+    keyboard.handleKeyUp(UiohookKey.CtrlRight);
+    keyboard.handleKeyDown(UiohookKey.Ctrl);
+    keyboard.handleKeyDown(UiohookKey.CtrlRight);
+    expect(down).toHaveBeenLastCalledWith('ask');
+    service.unregister();
+  });
+  it('observes Esc only while subscribed, does not replace trigger callbacks or add hook listeners', () => {
+    const { keyboard, service, down } = fixture();
+    const listener = vi.fn();
+    const before = vi.mocked(uIOhook.on).mock.calls.length;
+    const unsubscribe = service.onEscape(listener);
+    keyboard.handleKeyDown(UiohookKey.Escape);
+    expect(listener).toHaveBeenCalledOnce();
+    unsubscribe();
+    keyboard.handleKeyDown(UiohookKey.Escape);
+    expect(listener).toHaveBeenCalledOnce();
+    expect(down).not.toHaveBeenCalled();
+    expect(vi.mocked(uIOhook.on).mock.calls.length).toBe(before);
     service.unregister();
   });
 });

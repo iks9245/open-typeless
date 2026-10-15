@@ -1,3 +1,4 @@
+import { AskPanel } from './AskPanel';
 import { triggerKeyLabel } from '../../../../../shared/constants/keyboard';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { SettingsProvider, useSettings } from '../hooks/SettingsContext';
@@ -9,6 +10,7 @@ import { SettingsPanel } from './SettingsPanel';
 const TABS = [
   { id: 'history', label: '歷史紀錄' },
   { id: 'report', label: '報告' },
+  { id: 'ask', label: '問問題' },
   { id: 'vocabulary', label: '詞彙表' },
   { id: 'settings', label: '設定' },
 ] as const;
@@ -44,6 +46,7 @@ function AppContent() {
         <HistoryPanel openSettings={() => { setTab('settings'); tabRefs.current[TABS.findIndex(item => item.id === 'settings')]?.focus(); }} />
       </section>
       <section role="tabpanel" id="panel-report" aria-labelledby="tab-report" hidden={tab !== 'report'} tabIndex={0}><ReportPanel active={tab === 'report'} /></section>
+      <section role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" hidden={tab !== 'ask'} tabIndex={0}><AskPanel active={tab === 'ask'} /></section>
       <section role="tabpanel" id="panel-vocabulary" aria-labelledby="tab-vocabulary" hidden={tab !== 'vocabulary'} tabIndex={0}><VocabularyPanel /></section>
       <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden={tab !== 'settings'} tabIndex={0}><SettingsPanel active={tab === 'settings'} /></section>
     </main>

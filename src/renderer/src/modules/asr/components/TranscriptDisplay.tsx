@@ -10,6 +10,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 interface TranscriptDisplayProps {
   /** Transcribed text to display */
   text?: string;
+  answer?: boolean;
   /** Whether this is an interim (not final) result */
   interim?: boolean;
 }
@@ -27,7 +28,7 @@ interface TranscriptDisplayProps {
  * <TranscriptDisplay text="Hello world" interim={false} />
  * ```
  */
-export function TranscriptDisplay({ text, interim = false }: TranscriptDisplayProps): ReactNode {
+export function TranscriptDisplay({ text, interim = false, answer = false }: TranscriptDisplayProps): ReactNode {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Measure content height, notify main process, and auto-scroll to bottom
@@ -43,14 +44,14 @@ export function TranscriptDisplay({ text, interim = false }: TranscriptDisplayPr
         const scrollHeight = container.scrollHeight;
 
         // Notify main process about content height for window resizing
-        floatingApi.floatingWindow.setContentHeight(scrollHeight);
+        floatingApi.floatingWindow.setContentHeight(scrollHeight + (answer ? 20 : 0));
 
         // Auto-scroll to bottom to show latest transcription text
         // This ensures the most recent content is always visible
-        container.scrollTop = scrollHeight;
+        container.scrollTop = answer ? 0 : scrollHeight;
       }
     });
-  }, [text]);
+  }, [text, answer]);
 
   // Don't render if no text
   if (!text) {

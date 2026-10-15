@@ -80,6 +80,7 @@ export class KeyboardService {
   private onKeyUp: (() => void) | null = null;
   private onCancel: ((durationMs: number) => void) | null = null;
   private isStarted = false;
+  private readonly escapeListeners = new Set<() => void>();
   // Physical hold outlives a cancelled session, so repeats and deferred changes wait for release.
   private triggerHeld = false;
   private pendingTriggerKey: number | null = null;
@@ -130,7 +131,7 @@ export class KeyboardService {
     // Create bound handlers
     const keyDownHandler = (e: KeyEventFlags) => {
       this.syncModifiers(e);
-      this.handleKeyDown(e.keycode, { shift: e.shiftKey });
+      this.handleKeyDown(e.keycode, { shift: e.shiftKey, ctrl: e.ctrlKey });
     };
     const keyUpHandler = (e: KeyEventFlags) => {
       this.syncModifiers(e);
@@ -193,6 +194,12 @@ export class KeyboardService {
     this.resetState();
 
     logger.info('KeyboardService unregistered');
+  }
+
+  /** Subscribe only while an answer is visible. This observes Esc without consuming it. */
+  onEscape(listener: () => void): () => void {
+    this.escapeListeners.add(listener);
+    return () => { this.escapeListeners.delete(listener); };
   }
 
   /**
@@ -285,7 +292,10 @@ export class KeyboardService {
   /**
    * Handle key down event.
    */
-  private handleKeyDown(keycode: number, modifiers?: { shift?: boolean }): void {
+  private handleKeyDown(keycode: number, modifiers?: { shift?: boolean; ctrl?: boolean }): void {
+    if (keycode === UiohookKey.Escape && !this.state.isKeyHeld) {
+      for (const listener of this.escapeListeners) listener();
+    }
     if (this.isModifier(keycode)) this.heldModifiers.add(keycode);
     if (this.state.isKeyHeld && keycode !== this.config.triggerKey &&
       keycode !== UiohookKey.Shift && keycode !== UiohookKey.ShiftRight) {
@@ -314,7 +324,10 @@ export class KeyboardService {
 
     // Call callback
     const shift = modifiers?.shift ?? (this.heldModifiers.has(UiohookKey.Shift) || this.heldModifiers.has(UiohookKey.ShiftRight));
-    this.onKeyDown?.(shift ? 'command' : 'dictation');
+    const controlTrigger = this.config.triggerKey === UiohookKey.Ctrl || this.config.triggerKey === UiohookKey.CtrlRight;
+    const heldCtrl = [UiohookKey.Ctrl, UiohookKey.CtrlRight].some(code => code !== this.config.triggerKey && this.heldModifiers.has(code));
+    const ctrl = controlTrigger ? heldCtrl : modifiers?.ctrl ?? heldCtrl;
+    this.onKeyDown?.(ctrl ? 'ask' : shift ? 'command' : 'dictation');
   }
 
   /**

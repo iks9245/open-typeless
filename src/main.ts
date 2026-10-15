@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { memoryIndexer } from './main/services/memory';
 import { app, session } from 'electron';
 import type { BrowserWindow } from 'electron';
 import started from 'electron-squirrel-startup';
@@ -63,6 +64,7 @@ const initStorage = (): void => {
 app.on('ready', () => {
   installPermissionHandlers(session.defaultSession);
   initStorage();
+  memoryIndexer.start();
   // Start (or find) the local whisper.cpp server in the background; it reads its URL from
   // settings, so storage comes first. Never rejects; failures are logged.
   void whisperServerService.start();
@@ -83,6 +85,7 @@ app.on('window-all-closed', () => {
 
 // Cleanup function for graceful shutdown
 function cleanup(): void {
+  memoryIndexer.stop();
   pushToTalkService.dispose();
   polishService.dispose();
   floatingWindow.destroy();

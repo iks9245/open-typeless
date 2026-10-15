@@ -1,3 +1,5 @@
+import { keyboardService } from '../services/keyboard';
+import type { AskResult } from '../../shared/types/memory';
 import type { InputMode } from '../../shared/constants/command';
 /**
  * Floating Window Manager.
@@ -56,6 +58,7 @@ const FLOATING_WINDOW_CONFIG = {
  */
 export class FloatingWindowManager {
   private window: BrowserWindow | null = null;
+  private dismissAnswer: (() => void) | null = null;
   private autoHideTimer: NodeJS.Timeout | null = null;
   /** Current window height for debounce comparison */
   private currentHeight: number = FLOATING_WINDOW_CONFIG.MIN_HEIGHT;
@@ -161,6 +164,7 @@ export class FloatingWindowManager {
    * Hide the floating window.
    */
   hide(): void {
+    this.clearAnswer();
     this.clearAutoHideTimer();
     this.window?.hide();
     this.sendMode('dictation');
@@ -172,6 +176,7 @@ export class FloatingWindowManager {
    * Destroy the floating window.
    */
   destroy(): void {
+    this.clearAnswer();
     this.clearAutoHideTimer();
     if (this.window) {
       this.window.removeAllListeners('close');
@@ -188,6 +193,8 @@ export class FloatingWindowManager {
     if (!this.window || this.window.isDestroyed()) {
       return;
     }
+
+    if (status === 'connecting') this.clearAnswer();
 
     // Show window for active statuses
     if (status === 'connecting' || status === 'listening' || status === 'processing') {
@@ -208,6 +215,24 @@ export class FloatingWindowManager {
     }
 
     this.window.webContents.send(IPC_CHANNELS.ASR.STATUS, status);
+  }
+
+  /** Keep answers visible without changing focus or adding another native listener. */
+  sendAnswer(result: AskResult): void {
+    this.show();
+    this.clearAnswer();
+    this.sendMode('ask');
+    this.sendResult({ type: 'final', isFinal: true, text: result.answer });
+    this.sendStatus('done');
+    this.window?.webContents.send(IPC_CHANNELS.FLOATING_WINDOW.ANSWER, result);
+    this.clearAutoHideTimer();
+    this.dismissAnswer = keyboardService.onEscape(() => this.hide());
+    this.autoHideTimer = setTimeout(() => this.hide(), Math.min(30000, 8000 + 60 * Array.from(result.answer).length));
+  }
+
+  private clearAnswer(): void {
+    this.dismissAnswer?.();
+    this.dismissAnswer = null;
   }
 
   /** Tell the floating renderer which voice input mode is active. */

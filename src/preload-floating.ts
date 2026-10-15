@@ -1,3 +1,4 @@
+import type { AskResult } from './shared/types/memory';
 /** Minimal bridge for the sandboxed floating renderer. */
 
 import { contextBridge, ipcRenderer } from 'electron';
@@ -9,6 +10,11 @@ import type { FloatingAppApi } from './types/global';
 contextBridge.exposeInMainWorld('api', {
   asr: asrEvents,
   floatingWindow: {
+    onAnswer: callback => {
+      const handler = (_event: Electron.IpcRendererEvent, result: AskResult): void => { callback(result); };
+      ipcRenderer.on(IPC_CHANNELS.FLOATING_WINDOW.ANSWER, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.FLOATING_WINDOW.ANSWER, handler); };
+    },
     onMode: (callback: (mode: InputMode) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, mode: InputMode): void => { callback(mode); };
       ipcRenderer.on(IPC_CHANNELS.FLOATING_WINDOW.MODE, handler);

@@ -1,3 +1,4 @@
+import { memoryService } from '../memory';
 /**
  * Push-to-Talk Service.
  * Orchestrates keyboard hooks, ASR, and text insertion for voice input.
@@ -279,15 +280,15 @@ export class PushToTalkService {
 
     // Best effort: returns null when history is disabled or storage is unavailable
     const settings = settingsService.get();
-    this.mode = mode === 'command' && settings.success === true && settings.data.command.enabled ? 'command' : 'dictation';
+    this.mode = mode === 'ask' ? 'ask' : mode === 'command' && settings.success === true && settings.data.command.enabled ? 'command' : 'dictation';
     floatingWindow.sendMode(this.mode);
     if (this.mode === 'command') {
       this.commandModel = settings.success === true ? settings.data.command.model : DEFAULT_COMMAND_MODEL;
       commandService.warmUp(this.commandModel);
-    } else if (settings.success === true && settings.data.polish.enabled) {
+    } else if (this.mode === 'dictation' && settings.success === true && settings.data.polish.enabled) {
       polishService.warmUp(settings.data.polish.model);
     }
-    this.historyId = historyService.begin({
+    this.historyId = this.mode === 'ask' ? null : historyService.begin({
       mode: this.mode,
       engine: 'whisper.cpp',
       language: settings.success ? settings.data.asr.language : null,
@@ -376,11 +377,20 @@ export class PushToTalkService {
         : Promise.resolve({ text: null, error: null });
       const [outcome, captured] = await Promise.all([
         asrService.stopWithOutcome({
-          keepProcessing: mode === 'command' || (settings.success === true && settings.data.polish.enabled),
+          keepProcessing: mode === 'ask' || mode === 'command' || (settings.success === true && settings.data.polish.enabled),
         }),
         selection,
       ]);
       const result = outcome.result;
+
+      if (mode === 'ask') {
+        if (outcome.error) { floatingWindow.sendError('提問失敗：Transcription failed'); return; }
+        if (!result?.text.trim()) { floatingWindow.hide(); return; }
+        const answer = await memoryService.ask(result.text);
+        if (answer.success === false) floatingWindow.sendError(`提問失敗：${answer.error}`);
+        else floatingWindow.sendAnswer(answer.data);
+        return;
+      }
 
       if (mode === 'command' && outcome.error) {
         this.failCommand(historyId, 'Transcription failed');
@@ -462,6 +472,7 @@ export class PushToTalkService {
 
       logger.info('Push-to-talk session completed');
     } catch (error) {
+      if (mode === 'ask') { floatingWindow.sendError('提問失敗：oMLX request failed'); return; }
       if (mode === 'command') {
         this.failCommand(historyId, 'Command failed');
         return;

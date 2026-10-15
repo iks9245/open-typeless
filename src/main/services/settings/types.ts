@@ -25,12 +25,18 @@ const historySchema = z.object({
   retentionDays: z.number().int().positive().nullable(),
 }).strict();
 
+export const MAX_VOCABULARY_TERMS = 50;
+export const MAX_VOCABULARY_TERM_LENGTH = 40;
+
 const asrSchema = z.object({
   language: z.string().nullable(),
   whisperServerUrl: z.string().url().refine(
     (value) => /^https?:\/\//i.test(value),
     'Whisper server URL must use http or https',
   ),
+  // Terms sent to whisper as a prompt to bias recognition (see vocabulary-prompt.ts)
+  vocabulary: z.array(z.string().trim().min(1).max(MAX_VOCABULARY_TERM_LENGTH))
+    .max(MAX_VOCABULARY_TERMS),
 }).strict();
 
 const inputSchema = z.object({ autoInsert: z.boolean() }).strict();
@@ -55,6 +61,7 @@ export const settingSchemas = {
   'history.retentionDays': historySchema.shape.retentionDays,
   'asr.language': asrSchema.shape.language,
   'asr.whisperServerUrl': asrSchema.shape.whisperServerUrl,
+  'asr.vocabulary': asrSchema.shape.vocabulary,
   'input.autoInsert': inputSchema.shape.autoInsert,
 };
 
@@ -72,6 +79,7 @@ export function applySetting(target: AppSettings, key: SettingKey, value: unknow
     case 'history.retentionDays': target.history.retentionDays = value as number | null; break;
     case 'asr.language': target.asr.language = value as string | null; break;
     case 'asr.whisperServerUrl': target.asr.whisperServerUrl = value as string; break;
+    case 'asr.vocabulary': target.asr.vocabulary = value as string[]; break;
     case 'input.autoInsert': target.input.autoInsert = value as boolean; break;
   }
 }
@@ -86,6 +94,7 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
     asr: {
       language: env.WHISPER_LANGUAGE ?? null,
       whisperServerUrl: url.success === true ? url.data : 'http://localhost:8080',
+      vocabulary: [],
     },
     input: { autoInsert: true },
   };

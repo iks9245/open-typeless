@@ -12,6 +12,8 @@ export interface AppSettings {
   asr: {
     language: string | null;
     whisperServerUrl: string;
+    /** Proper nouns and terms that recognition should favor */
+    vocabulary: string[];
   };
   input: {
     autoInsert: boolean;

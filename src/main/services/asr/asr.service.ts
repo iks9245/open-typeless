@@ -8,6 +8,7 @@ import { EventEmitter } from 'events';
 import log from 'electron-log';
 import { WhisperClient } from './lib/whisper-client';
 import type { SpeechLevel } from './lib/speech-level';
+import { buildVocabularyPrompt } from './lib/vocabulary-prompt';
 import { loadWhisperConfig } from './lib/config';
 import { floatingWindow } from '../../windows';
 import { settingsService } from '../settings';
@@ -123,6 +124,7 @@ export class ASRService extends EventEmitter {
     if (settings.success) {
       whisperConfig.serverUrl = settings.data.asr.whisperServerUrl;
       whisperConfig.language = settings.data.asr.language ?? undefined;
+      whisperConfig.prompt = buildVocabularyPrompt(settings.data.asr.vocabulary) ?? undefined;
     }
     if (config?.serverUrl) whisperConfig.serverUrl = config.serverUrl;
     if (config?.language) whisperConfig.language = config.language;

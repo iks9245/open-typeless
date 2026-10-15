@@ -174,6 +174,23 @@ run(async () => {
     configure({ history: { enabled: true } });
   });
 
+  await test('the vocabulary is sent as a prompt and nothing is sent without it', async () => {
+    await session();
+    assert(whisper.lastPrompt === null, 'no prompt without vocabulary', whisper.lastPrompt);
+
+    configure({ asr: { vocabulary: ['Open Typeless', 'Trellis', 'whisper.cpp'] } });
+    await session();
+    assert(whisper.lastPrompt === '這段話可能會提到 Open Typeless、Trellis 和 whisper.cpp。', 'prompt sent', whisper.lastPrompt);
+    configure({ asr: { vocabulary: [] } });
+  });
+
+  await test('line breaks between whisper segments are not inserted', async () => {
+    whisper.text = '這個功能是用\nTrellis 框架\n實作的';
+    await session();
+    whisper.text = '你好世界';
+    assert(inserted.at(-1) === '這個功能是用 Trellis 框架實作的', 'segments joined', inserted.at(-1));
+  });
+
   await test('the IPC stopASR procedure still returns the plain result', async () => {
     await startASR();
     asrService.processAudioChunk(toneChunk());

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase, runMigrations, settings } from '../../src/main/db';
 import { getSettings, updateSettings } from '../../src/main/services/settings/procedures';
-import { getDefaultSettings } from '../../src/main/services/settings/types';
+import { getDefaultSettings, MAX_VOCABULARY_TERM_LENGTH, MAX_VOCABULARY_TERMS } from '../../src/main/services/settings/types';
 
 describe('settings', () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -22,7 +22,7 @@ describe('settings', () => {
     const defaults = getDefaultSettings(env);
     expect(defaults).toEqual({
       history: { enabled: true, saveAudio: false, retentionDays: null },
-      asr: { language: 'zh', whisperServerUrl: 'http://localhost:9000' },
+      asr: { language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
       input: { autoInsert: true },
     });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: defaults });
@@ -30,7 +30,7 @@ describe('settings', () => {
   });
 
   it('uses built-in defaults when environment values are absent', () => {
-    expect(getDefaultSettings({}).asr).toEqual({ language: null, whisperServerUrl: 'http://localhost:8080' });
+    expect(getDefaultSettings({}).asr).toEqual({ language: null, whisperServerUrl: 'http://localhost:8080', vocabulary: [] });
   });
 
   it.each(['not a URL', 'ftp://localhost:9000', ''])('falls back to localhost:8080 for invalid environment URL %j', (url) => {
@@ -42,12 +42,12 @@ describe('settings', () => {
   it('lets stored overrides including null language win over environment defaults', () => {
     const patch = {
       history: { enabled: false, saveAudio: true, retentionDays: 30 },
-      asr: { language: null, whisperServerUrl: 'https://example.com/whisper' },
+      asr: { language: null, whisperServerUrl: 'https://example.com/whisper', vocabulary: [] },
       input: { autoInsert: false },
     };
     expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: patch });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: patch });
-    expect(connection.db.select().from(settings).all()).toHaveLength(6);
+    expect(connection.db.select().from(settings).all()).toHaveLength(7);
     expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.language'))
       .toEqual({ value: 'null', updated_at: now() });
   });
@@ -98,5 +98,56 @@ describe('settings', () => {
       success: true,
       data: { ...getDefaultSettings(env), history: { ...getDefaultSettings(env).history, saveAudio: true }, input: { autoInsert: false } },
     });
+  });
+});
+
+describe('settings asr.vocabulary', () => {
+  let connection: ReturnType<typeof openDatabase>;
+  const env = { WHISPER_SERVER_URL: 'http://localhost:9000', WHISPER_LANGUAGE: 'zh' };
+  const now = () => 123456789;
+
+  beforeEach(() => {
+    connection = openDatabase(':memory:');
+    runMigrations(connection.db, path.resolve(__dirname, '../../drizzle'));
+  });
+
+  afterEach(() => {
+    connection?.sqlite.close();
+  });
+
+  it('defaults to an empty list without storing it', () => {
+    const result = getSettings(connection.db, env);
+    expect(result.success).toBe(true);
+    if (result.success === true) expect(result.data.asr.vocabulary).toEqual([]);
+    expect(connection.db.select().from(settings).all()).toEqual([]);
+  });
+
+  it('stores and reads back a list with terms trimmed by validation', () => {
+    const vocabulary = ['Jeris', 'Open Typeless', '自訂詞彙'];
+    const expected = { success: true, data: { ...getDefaultSettings(env), asr: { ...getDefaultSettings(env).asr, vocabulary } } };
+    expect(updateSettings(connection.db, { asr: { vocabulary: [' Jeris ', '\tOpen Typeless\n', ' 自訂詞彙 '] } }, now, env))
+      .toEqual(expected);
+    expect(getSettings(connection.db, env)).toEqual(expected);
+    expect(connection.db.select().from(settings).all()).toHaveLength(1);
+    expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.vocabulary'))
+      .toEqual({ value: JSON.stringify(vocabulary), updated_at: now() });
+  });
+
+  it.each([
+    { name: 'an empty-string term', vocabulary: ['Jeris', ''] },
+    { name: 'a whitespace-only term', vocabulary: ['Jeris', ' \t\n '] },
+    { name: 'a term longer than the length limit', vocabulary: ['A'.repeat(MAX_VOCABULARY_TERM_LENGTH + 1)] },
+    { name: 'more terms than the count limit', vocabulary: Array.from({ length: MAX_VOCABULARY_TERMS + 1 }, (_, index) => `term-${index}`) },
+    { name: 'a non-array value', vocabulary: 'Jeris' },
+  ])('rejects $name without writing any field', ({ vocabulary }) => {
+    expect(updateSettings(connection.db, { asr: { vocabulary }, input: { autoInsert: false } }, now, env).success)
+      .toBe(false);
+    expect(connection.db.select().from(settings).all()).toEqual([]);
+  });
+
+  it('ignores a corrupt stored vocabulary and falls back to an empty list', () => {
+    connection.sqlite.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)')
+      .run('asr.vocabulary', '"not an array"', now());
+    expect(getSettings(connection.db, env)).toEqual({ success: true, data: getDefaultSettings(env) });
   });
 });

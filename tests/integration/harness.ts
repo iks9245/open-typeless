@@ -89,6 +89,8 @@ export function silenceChunk(ms = 1000): ArrayBuffer {
 export interface FakeWhisper {
   url: string;
   inferences: number;
+  /** The `prompt` form field of the last inference request, or null when absent */
+  lastPrompt: string | null;
   mode: 'ok' | 'error';
   text: string;
   /** Delay before GET / answers, to simulate a server still loading */
@@ -101,6 +103,7 @@ export async function startFakeWhisper(text = '你好'): Promise<FakeWhisper> {
   const state: FakeWhisper = {
     url: '',
     inferences: 0,
+    lastPrompt: null,
     mode: 'ok',
     text,
     healthDelayMs: 0,
@@ -115,8 +118,12 @@ export async function startFakeWhisper(text = '你好'): Promise<FakeWhisper> {
       return;
     }
     state.inferences++;
-    req.resume();
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => {
+      // Multipart form data: the prompt part is plain text between boundaries
+      const body = Buffer.concat(chunks).toString('utf8');
+      state.lastPrompt = body.match(/name="prompt"\r\n\r\n([\s\S]*?)\r\n--/)?.[1] ?? null;
       if (state.mode === 'error') {
         res.writeHead(500);
         res.end('boom');

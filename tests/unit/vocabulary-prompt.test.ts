@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVocabularyPrompt } from '../../src/main/services/asr/lib/vocabulary-prompt';
+import { buildVocabularyPrompt, planVocabularyPrompt } from '../../src/shared/lib/vocabulary-prompt';
 
 describe('buildVocabularyPrompt', () => {
   it('returns null for an empty list', () => {
@@ -59,5 +59,24 @@ describe('buildVocabularyPrompt', () => {
 
   it('returns null for a single term longer than 150 characters', () => {
     expect(buildVocabularyPrompt(['A'.repeat(151)])).toBeNull();
+  });
+});
+
+describe('planVocabularyPrompt', () => {
+  it('reports included and skipped terms for the settings preview', () => {
+    const long = 'L'.repeat(140);
+    const plan = planVocabularyPrompt(['Open Typeless', long, 'Trellis', 'open typeless']);
+    expect(plan.included).toEqual(['Open Typeless', 'Trellis']);
+    expect(plan.skipped).toEqual([long]);
+    expect(plan.prompt).toBe('這段話可能會提到 Open Typeless 和 Trellis。');
+  });
+
+  it('agrees with buildVocabularyPrompt', () => {
+    const terms = ['A', ' B ', 'a', 'C'];
+    expect(planVocabularyPrompt(terms).prompt).toBe(buildVocabularyPrompt(terms));
+  });
+
+  it('returns no prompt and no terms for an empty vocabulary', () => {
+    expect(planVocabularyPrompt([])).toEqual({ prompt: null, included: [], skipped: [] });
   });
 });

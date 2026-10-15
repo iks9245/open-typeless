@@ -125,6 +125,7 @@ export function encodeHistoryCursor(cursor: HistoryCursor): string {
 export const listHistoryInputSchema: z.ZodType<ListHistoryInput> = z.object({
   cursor: z.string().max(1024).refine((value) => decodeHistoryCursor(value) !== null, 'Invalid history cursor').optional(),
   limit: z.number().int().min(1).max(200).default(50),
-  query: z.string().trim().max(200).optional(),
+  // A blank query means no search: LIKE '%%' would also drop rows whose text is NULL (failed sessions)
+  query: z.string().trim().max(200).transform((value) => (value === '' ? undefined : value)).optional(),
   status: z.enum(TRANSCRIPTION_STATUSES).optional(),
 }).strict();

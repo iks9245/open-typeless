@@ -233,6 +233,17 @@ describe('history procedures', () => {
     expect(listHistory(connection.db, { limit }).success).toBe(false);
   });
 
+  it('treats a blank query as no search so rows without text are still listed', () => {
+    // Regression: the UI always sends query '', and LIKE '%%' never matches a NULL final_text
+    const failed = seed({ status: 'failed', finalText: null, rawText: null, errorCode: 'start_failed' });
+    const completed = seed();
+    for (const query of ['', '   ']) {
+      const ids = data(listHistory(connection.db, { query })).items.map((item) => item.id);
+      expect(ids).toEqual(expect.arrayContaining([failed, completed]));
+    }
+    expect(data(listHistory(connection.db, { query: 'saved' })).items.map((item) => item.id)).toEqual([completed]);
+  });
+
   it('filters rows by status', () => {
     const failed = seed({ status: 'failed' });
     seed({ status: 'completed' });

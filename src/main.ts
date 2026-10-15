@@ -23,8 +23,11 @@ setupAllIpcHandlers();
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 960,
+    height: 680,
+    minWidth: 720,
+    minHeight: 520,
+    title: 'Open Typeless',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

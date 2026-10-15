@@ -6,6 +6,7 @@
 import log from 'electron-log';
 import { z } from 'zod';
 import type { AppSettings, AppSettingsPatch } from '../../../shared/types/settings';
+import { MAX_VOCABULARY_TERMS, MAX_VOCABULARY_TERM_LENGTH } from '../../../shared/lib/vocabulary-prompt';
 
 const logger = log.scope('settings:types');
 
@@ -25,8 +26,7 @@ const historySchema = z.object({
   retentionDays: z.number().int().positive().nullable(),
 }).strict();
 
-export const MAX_VOCABULARY_TERMS = 50;
-export const MAX_VOCABULARY_TERM_LENGTH = 40;
+export { MAX_VOCABULARY_TERMS, MAX_VOCABULARY_TERM_LENGTH };
 
 const asrSchema = z.object({
   language: z.string().nullable(),
@@ -34,7 +34,7 @@ const asrSchema = z.object({
     (value) => /^https?:\/\//i.test(value),
     'Whisper server URL must use http or https',
   ),
-  // Terms sent to whisper as a prompt to bias recognition (see vocabulary-prompt.ts)
+  // Terms sent to whisper as a prompt to bias recognition (see shared/lib/vocabulary-prompt.ts)
   vocabulary: z.array(z.string().trim().min(1).max(MAX_VOCABULARY_TERM_LENGTH))
     .max(MAX_VOCABULARY_TERMS),
 }).strict();

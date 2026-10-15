@@ -7,6 +7,7 @@ import { setupASRHandlers } from './asr.handler';
 import { setupFloatingWindowHandlers } from './floating-window.handler';
 import { setupHistoryHandlers } from './history.handler';
 import { setupSettingsHandlers } from './settings.handler';
+import { setupWhisperServerHandlers } from './whisper-server.handler';
 
 /**
  * Setup all IPC handlers.
@@ -17,4 +18,5 @@ export function setupAllIpcHandlers(): void {
   setupFloatingWindowHandlers();
   setupHistoryHandlers();
   setupSettingsHandlers();
+  setupWhisperServerHandlers();
 }

@@ -34,7 +34,7 @@ const EMPTY_SUBMISSION: SubmittedAudio = { pcmBytes: 0, wav: null, speech: null,
 export interface WhisperClientConfig {
   serverUrl: string;
   language?: string; // e.g. "zh", "en" — undefined means auto-detect
-  prompt?: string; // vocabulary prompt (see vocabulary-prompt.ts); undefined sends none
+  prompt?: string; // vocabulary prompt (see shared/lib/vocabulary-prompt.ts); undefined sends none
 }
 
 // Build a minimal WAV header around raw PCM (16-bit, 16 kHz, mono)

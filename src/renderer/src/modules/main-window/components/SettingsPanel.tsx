@@ -1,3 +1,4 @@
+import { effectivePolishStyle } from '../../../../../shared/lib/polish-style';
 import { useMemoryStatus, memoryStatusLabel } from '../hooks/useMemoryStatus';
 import { TRIGGER_KEYS, triggerKeyLabel } from '../../../../../shared/constants/keyboard';
 import { useLoginItem } from '../hooks/useLoginItem';
@@ -8,7 +9,7 @@ import { usePolishStatus } from '../hooks/usePolishStatus';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useMounted } from '../hooks/useMounted';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
-import { polishModelOptions, polishReasonLabel, serverModeLabel, serverStateLabel } from '../lib/format';
+import { polishStyleModelHint, polishModelOptions, polishReasonLabel, serverModeLabel, serverStateLabel } from '../lib/format';
 
 function SettingRow({ title, detail, children }: { title: string; detail?: string; children: ReactNode }) {
   return <div className="setting-row"><div><span className="setting-title">{title}</span>{detail && <p className="muted help">{detail}</p>}</div>{children}</div>;
@@ -64,6 +65,8 @@ export function SettingsPanel({ active }: { active: boolean }) {
   };
 
   const disabled = !settings || saving;
+  const cantonese = settings && effectivePolishStyle(settings) === 'cantonese';
+  const styleModelHint = settings ? polishStyleModelHint(settings) : null;
   return (
     <div className="panel-content settings-panel">
       <div className="section-heading"><div><h1>設定</h1><p className="muted">依照你的習慣，調整聽寫體驗。</p></div></div>
@@ -108,6 +111,17 @@ export function SettingsPanel({ active }: { active: boolean }) {
             checked={settings?.polish.enabled ?? false} disabled={disabled || ((!polish.status?.available || Boolean(polish.error)) && !settings?.polish.enabled)}
             onChange={(event) => { void update({ polish: { enabled: event.target.checked } }); }} />
         </SettingRow>
+        <SettingRow title="潤稿風格" detail={cantonese ? '會把辨識結果還原成粵語口語，每句約多 2–3 秒。建議使用 Qwen3.8-27B，9B 較常改錯。' : undefined}>
+          <select aria-label="潤稿風格" data-testid="settings-polish-style" value={settings?.polish.style ?? 'auto'} disabled={disabled}
+            onChange={(event) => {
+              const style = event.target.value;
+              if (style === 'auto' || style === 'standard' || style === 'cantonese') void update({ polish: { style } });
+            }}>
+            <option value="auto">自動（辨識語言是粵語時用粵語口語）</option>
+            <option value="standard">一般（整理成書面文字）</option><option value="cantonese">粵語口語</option>
+          </select>
+        </SettingRow>
+        {styleModelHint && <p className="error-text help" data-testid="polish-style-model-hint" role="status">{styleModelHint}</p>}
         <SettingRow title="潤稿模型">
           <select aria-label="潤稿模型" data-testid="settings-polish-model" value={settings?.polish.model ?? ''}
             disabled={disabled || !polish.status?.available || Boolean(polish.error)}

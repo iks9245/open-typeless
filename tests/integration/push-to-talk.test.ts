@@ -3,6 +3,7 @@
  * fake whisper.cpp server, text insertion (stubbed) and history recording.
  */
 
+import { CANTONESE_SYSTEM_PROMPT, SYSTEM_PROMPT } from '../../src/main/services/polish/lib/prompt';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { BrowserWindow } from 'electron';
@@ -216,6 +217,22 @@ run(async () => {
     assert(omlx.lastAuthorization === 'Bearer test-key', 'API key sent');
     assert(omlx.lastBody?.model === 'Qwen3.8-27B-oQ4e-mtp', 'configured model used', omlx.lastBody?.model);
     assert((omlx.lastBody?.chat_template_kwargs as { enable_thinking?: boolean })?.enable_thinking === false, 'thinking disabled');
+  });
+
+  await test('Cantonese recognition with auto style sends the Cantonese prompt and standard overrides it', async () => {
+    const previous = settingsService.get();
+    assert(previous.success, 'settings readable');
+    try {
+      configure({ asr: { language: 'yue', vocabulary: [] }, polish: { enabled: true, style: 'auto' } });
+      await session();
+      const system = () => (omlx.lastBody?.messages as { role: string; content: string }[] | undefined)?.[0];
+      assert(system()?.role === 'system' && system()?.content === CANTONESE_SYSTEM_PROMPT, 'auto with yue sends Cantonese system prompt', system());
+      configure({ polish: { style: 'standard' } });
+      await session();
+      assert(system()?.role === 'system' && system()?.content === SYSTEM_PROMPT, 'standard overrides Cantonese recognition', system());
+    } finally {
+      configure(previous.data);
+    }
   });
 
   await test('oMLX failure falls back to the raw transcript', async () => {

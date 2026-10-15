@@ -21,6 +21,7 @@ export interface AppSettings {
   polish: {
     enabled: boolean;
     model: string;
+    style: 'auto' | 'standard' | 'cantonese';
   };
   command: {
     enabled: boolean;

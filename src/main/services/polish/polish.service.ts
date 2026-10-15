@@ -7,7 +7,7 @@ import { createCompletion, listModels, OmlxHttpError } from './lib/omlx-client';
 import { buildPolishMessages } from './lib/prompt';
 import { acceptPolished } from './lib/sanitize';
 import { toTraditional } from './lib/traditional';
-import type { PolishDependencies, PolishOutcome } from './types';
+import type { PolishDependencies, PolishOptions, PolishOutcome } from './types';
 
 export class PolishService {
   private readonly warming = new Set<string>();
@@ -38,7 +38,7 @@ export class PolishService {
   }
 
   /** Best effort: callers always receive either accepted output or their original text. */
-  async polish(text: string, options: { model: string; vocabulary: readonly string[] }): Promise<PolishOutcome> {
+  async polish(text: string, options: PolishOptions): Promise<PolishOutcome> {
     const started = this.deps.now();
     const outcome = (finalText: string, polished: boolean, error: string | null): PolishOutcome => ({
       text: finalText, polished, latencyMs: this.deps.now() - started, error,
@@ -53,7 +53,7 @@ export class PolishService {
         apiKey = config.apiKey;
         return createCompletion(config, {
           model: options.model,
-          messages: buildPolishMessages(text, options.vocabulary),
+          messages: buildPolishMessages(text, options.vocabulary, options.style),
           maxTokens: Math.min(2048, codePoints * 2 + 64),
         }, this.deps.fetch, signal);
       });

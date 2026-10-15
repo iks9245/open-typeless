@@ -1,6 +1,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CANTONESE_SYSTEM_PROMPT, SYSTEM_PROMPT } from '../../src/main/services/polish/lib/prompt';
 import { PolishService } from '../../src/main/services/polish/polish.service';
 import type { PolishDependencies } from '../../src/main/services/polish/types';
 import { getDefaultSettings } from '../../src/main/services/settings/types';
@@ -22,6 +23,17 @@ function dependencies(): PolishDependencies {
 const completion = (content: string): Response => new Response(JSON.stringify({ choices: [{ message: { content } }] }));
 
 describe('polish service without sockets', () => {
+  it.each(['standard', 'cantonese'] as const)('sends the %s prompt and keeps Traditional conversion', async style => {
+    const deps = dependencies();
+    deps.fetch = vi.fn(async () => completion('我哋将份文件攞過嚟。'));
+    const result = await new PolishService(deps).polish('我們把那份文件拿過來', { ...options, vocabulary: [], style });
+    expect(result).toMatchObject({ text: '我哋將份文件攞過嚟。', polished: true });
+    const request = JSON.parse(String(vi.mocked(deps.fetch).mock.calls[0][1]?.body));
+    expect(request.messages[0]).toEqual({
+      role: 'system', content: style === 'cantonese' ? CANTONESE_SYSTEM_PROMPT : SYSTEM_PROMPT,
+    });
+  });
+
   it('returns whitespace unchanged without reading config or requesting anything', async () => {
     const deps = dependencies();
     deps.readFile = vi.fn();
@@ -154,11 +166,12 @@ describe('polish service without sockets', () => {
     service.startWarmups();
     expect(warm).not.toHaveBeenCalled();
     expect(deps.settingsService.on).toHaveBeenCalledTimes(1);
-    settings = { ...settings, polish: { enabled: true, model: 'one' } };
+    settings = { ...settings, polish: { enabled: true, model: 'one', style: 'auto' } };
     changed?.(settings);
+    changed?.({ ...settings, polish: { ...settings.polish, style: 'cantonese' } });
     changed?.(settings);
-    changed?.({ ...settings, polish: { enabled: true, model: 'two' } });
-    changed?.({ ...settings, polish: { enabled: false, model: 'three' } });
+    changed?.({ ...settings, polish: { enabled: true, model: 'two', style: 'auto' } });
+    changed?.({ ...settings, polish: { enabled: false, model: 'three', style: 'auto' } });
     changed?.(settings);
     expect(warm.mock.calls).toEqual([['one'], ['two'], ['one']]);
     service.dispose();
@@ -200,7 +213,7 @@ describe('polish service without sockets', () => {
 
   it('warms on startup when enabled and treats unreadable settings as off', () => {
     const deps = dependencies();
-    deps.getSettings = () => ({ success: true, data: { ...getDefaultSettings({}), polish: { enabled: true, model: 'startup' } } });
+    deps.getSettings = () => ({ success: true, data: { ...getDefaultSettings({}), polish: { enabled: true, model: 'startup', style: 'auto' } } });
     const service = new PolishService(deps);
     const warm = vi.spyOn(service, 'warmUp').mockImplementation(() => undefined);
     service.startWarmups();

@@ -3,7 +3,7 @@
  * Extends the Window interface with the exposed API.
  */
 
-import type { ASRConfig, ASRResult, ASRStatus } from '../shared/types/asr';
+import type { ASRResult, ASRStatus } from '../shared/types/asr';
 import type { IpcResult } from '../shared/types/common';
 import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from '../shared/types/history';
 import type { PolishInfo } from '../shared/types/polish';
@@ -14,17 +14,6 @@ import type { WhisperServerInfo } from '../shared/types/whisper-server';
  * ASR API interface exposed via contextBridge.
  */
 interface ASRApi {
-  /**
-   * Start ASR session.
-   * @param config - Optional partial ASR configuration
-   */
-  start: (config?: Partial<ASRConfig>) => Promise<{ success: boolean }>;
-
-  /**
-   * Stop ASR session.
-   */
-  stop: () => Promise<{ success: boolean }>;
-
   /**
    * Send audio chunk to main process.
    * @param chunk - Audio data as ArrayBuffer
@@ -57,16 +46,6 @@ interface ASRApi {
  * Floating Window API interface exposed via contextBridge.
  */
 interface FloatingWindowApi {
-  /**
-   * Show the floating window.
-   */
-  show: () => Promise<{ success: boolean }>;
-
-  /**
-   * Hide the floating window.
-   */
-  hide: () => Promise<{ success: boolean }>;
-
   /**
    * Set content height for adaptive window sizing.
    * @param height - Content height in pixels (from scrollHeight)
@@ -145,13 +124,18 @@ interface WhisperServerApi {
 /**
  * Application API exposed to the renderer process.
  */
-interface AppApi {
+export interface AppApi {
   asr: ASRApi;
-  floatingWindow: FloatingWindowApi;
   history: HistoryApi;
   settings: SettingsApi;
   whisperServer: WhisperServerApi;
   polish: { getStatus: () => Promise<IpcResult<PolishInfo>> };
+}
+
+/** The floating renderer can only observe ASR and report its content height. */
+export interface FloatingAppApi {
+  asr: Pick<ASRApi, 'onStatus' | 'onResult' | 'onError'>;
+  floatingWindow: FloatingWindowApi;
 }
 
 declare global {

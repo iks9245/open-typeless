@@ -4,6 +4,7 @@
  * Measures content height and notifies main process for window adaptation.
  */
 
+import { floatingApi } from '../../../../floating/api';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 interface TranscriptDisplayProps {
@@ -42,7 +43,7 @@ export function TranscriptDisplay({ text, interim = false }: TranscriptDisplayPr
         const scrollHeight = container.scrollHeight;
 
         // Notify main process about content height for window resizing
-        window.api.floatingWindow.setContentHeight(scrollHeight);
+        floatingApi.floatingWindow.setContentHeight(scrollHeight);
 
         // Auto-scroll to bottom to show latest transcription text
         // This ensures the most recent content is always visible

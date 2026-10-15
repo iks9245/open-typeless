@@ -23,7 +23,7 @@ export function setupSettingsHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS.GET, async (event, input: unknown): Promise<IpcResult<AppSettings>> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return await settingsService.get(input);
     } catch (error) {
       logger.error('Failed to get settings', { error });
@@ -33,7 +33,7 @@ export function setupSettingsHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS.UPDATE, async (event, patch: unknown): Promise<IpcResult<AppSettings>> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return await settingsService.update(patch);
     } catch (error) {
       logger.error('Failed to update settings', { error });

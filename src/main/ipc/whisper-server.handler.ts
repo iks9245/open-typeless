@@ -38,7 +38,7 @@ export function setupWhisperServerHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.WHISPER_SERVER.STATUS, (event): IpcResult<WhisperServerInfo> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return { success: true, data: toWhisperServerInfo(whisperServerService.status()) };
     } catch (error) {
       logger.error('Failed to read whisper-server status', { error });

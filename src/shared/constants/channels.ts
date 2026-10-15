@@ -5,10 +5,6 @@
 
 export const IPC_CHANNELS = {
   ASR: {
-    /** Start ASR session */
-    START: 'asr:start',
-    /** Stop ASR session */
-    STOP: 'asr:stop',
     /** Send audio data (Renderer -> Main) */
     SEND_AUDIO: 'asr:send-audio',
     /** ASR result (Main -> Renderer) */
@@ -19,10 +15,6 @@ export const IPC_CHANNELS = {
     ERROR: 'asr:error',
   },
   FLOATING_WINDOW: {
-    /** Show floating window (Renderer -> Main) */
-    SHOW: 'floating-window:show',
-    /** Hide floating window (Renderer -> Main) */
-    HIDE: 'floating-window:hide',
     /** Set content height for adaptive window sizing (Renderer -> Main) */
     SET_CONTENT_HEIGHT: 'floating-window:set-content-height',
   },

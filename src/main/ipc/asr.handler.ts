@@ -7,8 +7,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import log from 'electron-log';
 import { IPC_CHANNELS } from '../../shared/constants/channels';
 import { asrService } from '../services/asr/asr.service';
-import { startASR, stopASR } from '../services/asr/procedures';
-import type { ASRConfig } from '../../shared/types/asr';
+import { isTrustedSender } from './sender';
 
 const logger = log.scope('asr-handler');
 
@@ -35,24 +34,13 @@ export function broadcastToAllWindows(channel: string, ...args: unknown[]): void
 
 /**
  * Setup ASR IPC handlers.
- * Registers handlers for start/stop requests and forwards service events to renderer.
+ * Receives audio from the main renderer and forwards service events to renderers.
  */
 export function setupASRHandlers(): void {
-  // Handle ASR start request
-  ipcMain.handle(IPC_CHANNELS.ASR.START, async (_event, config?: Partial<ASRConfig>) => {
-    logger.info('Received ASR start request', { hasConfig: !!config });
-    return startASR(config);
-  });
-
-  // Handle ASR stop request
-  ipcMain.handle(IPC_CHANNELS.ASR.STOP, async () => {
-    logger.info('Received ASR stop request');
-    return stopASR();
-  });
-
   // Handle incoming audio data from renderer
   let audioChunkCount = 0;
-  ipcMain.on(IPC_CHANNELS.ASR.SEND_AUDIO, (_event, chunk: ArrayBuffer) => {
+  ipcMain.on(IPC_CHANNELS.ASR.SEND_AUDIO, (event, chunk: ArrayBuffer) => {
+    if (!isTrustedSender(event, 'main')) return;
     audioChunkCount++;
     if (audioChunkCount === 1 || audioChunkCount % 50 === 0) {
       logger.info('Received audio chunk from renderer', {

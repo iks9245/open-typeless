@@ -23,7 +23,7 @@ export function setupHistoryHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.HISTORY.LIST, async (event, input: unknown): Promise<IpcResult<ListHistoryResult>> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return await historyService.list(input);
     } catch (error) {
       logger.error('Failed to list history', { error });
@@ -33,7 +33,7 @@ export function setupHistoryHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.HISTORY.GET, async (event, input: unknown): Promise<IpcResult<TranscriptionItem | null>> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return await historyService.get(input);
     } catch (error) {
       logger.error('Failed to get history', { error });
@@ -43,7 +43,7 @@ export function setupHistoryHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.HISTORY.DELETE, async (event, input: unknown): Promise<IpcResult<{ deleted: boolean }>> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return await historyService.delete(input);
     } catch (error) {
       logger.error('Failed to delete history', { error });
@@ -53,7 +53,7 @@ export function setupHistoryHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.HISTORY.CLEAR, async (event, input: unknown): Promise<IpcResult<{ deleted: number }>> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return await historyService.clear(input);
     } catch (error) {
       logger.error('Failed to clear history', { error });

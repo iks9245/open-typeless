@@ -12,7 +12,11 @@
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "node scripts/run-integration-tests.mjs",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "keywords": [],
   "author": {
@@ -29,6 +33,7 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron-forge/plugin-vite": "^7.11.1",
+    "@electron/asar": "3.4.1",
     "@electron/fuses": "^1.8.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/electron-squirrel-startup": "^1.0.2",
@@ -41,10 +46,12 @@
     "@vitejs/plugin-react": "^4.3.0",
     "drizzle-kit": "^0.31.11",
     "electron": "40.1.0",
+    "esbuild": "0.21.5",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "typescript": "^5.0.0",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "2.1.9"
   },
   "dependencies": {
     "@xitanggg/node-insert-text": "^1.5.1",

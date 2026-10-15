@@ -7,12 +7,17 @@
 import { EventEmitter } from 'events';
 import log from 'electron-log';
 import { WhisperClient } from './lib/whisper-client';
+import type { SpeechLevel } from './lib/speech-level';
 import { loadWhisperConfig } from './lib/config';
 import { floatingWindow } from '../../windows';
 import { settingsService } from '../settings';
+import { whisperServerService } from '../whisper-server';
 import type { ASRConfig, ASRResult, ASRStatus } from '../../../shared/types/asr';
 
 const logger = log.scope('asr-service');
+
+/** Longest wait for an app-managed whisper-server that is still loading its model */
+const SERVER_STARTUP_WAIT_MS = 30000;
 
 /** PCM bytes per millisecond for 16-bit, 16 kHz, mono audio. */
 const PCM_BYTES_PER_MS = (16000 * 2) / 1000;
@@ -33,6 +38,10 @@ export interface ASRSessionOutcome {
   error: string | null;
   /** WAV sent to the engine, or null when no audio was submitted */
   wav: Buffer | null;
+  /** Speech level of the recording, or null when nothing was recorded */
+  speech: SpeechLevel | null;
+  /** Why transcription was not requested ('silence'), or null when it was */
+  skipped: 'silence' | null;
 }
 
 /**
@@ -125,6 +134,17 @@ export class ASRService extends EventEmitter {
 
     // Show floating window and update status
     this.updateStatus('connecting');
+
+    // The app-managed server may still be loading its model: wait rather than fail
+    if (whisperServerService.status().state === 'starting') {
+      logger.info('Waiting for whisper-server to finish starting');
+      const ready = await whisperServerService.waitUntilReady(SERVER_STARTUP_WAIT_MS);
+      if (!ready) {
+        logger.warn('whisper-server is not ready; connecting anyway', {
+          status: whisperServerService.status(),
+        });
+      }
+    }
 
     // Verify whisper.cpp server is reachable
     try {
@@ -235,7 +255,7 @@ export class ASRService extends EventEmitter {
    * Assemble the session outcome from the current client state.
    */
   private buildOutcome(result: ASRResult | null, startedAt: number): ASRSessionOutcome {
-    const audio = this.client?.submittedAudio ?? { pcmBytes: 0, wav: null };
+    const audio = this.client?.submittedAudio ?? { pcmBytes: 0, wav: null, speech: null, skipped: null };
     return {
       result,
       audioDurationMs: Math.round(audio.pcmBytes / PCM_BYTES_PER_MS),
@@ -243,6 +263,8 @@ export class ASRService extends EventEmitter {
       detectedLanguage: null,
       error: this.sessionError,
       wav: audio.wav,
+      speech: audio.speech,
+      skipped: audio.skipped,
     };
   }
 

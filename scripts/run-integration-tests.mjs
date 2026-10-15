@@ -1,0 +1,86 @@
+#!/usr/bin/env node
+/**
+ * Runs tests/integration/*.test.ts inside the real Electron main process.
+ *
+ * Each test file is bundled with esbuild (native modules and electron stay external)
+ * and launched as `electron <bundle>` with its own temporary directory in
+ * INTEGRATION_TMP. A test passes when Electron exits with code 0.
+ *
+ * Usage: node scripts/run-integration-tests.mjs [name-filter]
+ */
+
+import { spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const testDir = path.join(root, 'tests', 'integration');
+const outDir = path.join(root, 'node_modules', '.cache', 'integration');
+const electron = path.join(root, 'node_modules', '.bin', 'electron');
+const TIMEOUT_MS = 180000;
+const filter = process.argv[2];
+
+const files = readdirSync(testDir)
+  .filter((name) => name.endsWith('.test.ts') && (!filter || name.includes(filter)))
+  .sort();
+
+if (files.length === 0) {
+  console.error('No integration tests matched');
+  process.exit(1);
+}
+
+mkdirSync(outDir, { recursive: true });
+
+const run = (bundle, tmp) => new Promise((resolve) => {
+  const child = spawn(electron, [bundle], {
+    cwd: root,
+    env: { ...process.env, INTEGRATION_TMP: tmp, ELECTRON_ENABLE_LOGGING: '0' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.on('data', (chunk) => { output += chunk; });
+  child.stderr.on('data', (chunk) => { output += chunk; });
+  const timer = setTimeout(() => {
+    output += `\nTimed out after ${TIMEOUT_MS} ms`;
+    child.kill('SIGKILL');
+  }, TIMEOUT_MS);
+  child.on('exit', (code, signal) => {
+    clearTimeout(timer);
+    resolve({ code, signal, output });
+  });
+});
+
+let failed = 0;
+for (const file of files) {
+  const bundle = path.join(outDir, file.replace(/\.ts$/, '.cjs'));
+  await build({
+    entryPoints: [path.join(testDir, file)],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile: bundle,
+    external: ['electron', 'better-sqlite3', 'uiohook-napi', '@xitanggg/node-insert-text', 'ws'],
+    logLevel: 'warning',
+  });
+
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'open-typeless-it-'));
+  const started = Date.now();
+  const { code, signal, output } = await run(bundle, tmp);
+  rmSync(tmp, { recursive: true, force: true });
+
+  // Show only the harness lines unless the run failed
+  const lines = output.split('\n');
+  const report = code === 0 ? lines.filter((line) => line.startsWith('  ✓') || line.startsWith('  ✗')) : lines;
+  console.log(`${code === 0 ? 'PASS' : 'FAIL'} ${file} (${Date.now() - started} ms)`);
+  console.log(report.filter((line) => line.trim()).join('\n'));
+  if (code !== 0) {
+    failed++;
+    console.log(`  exit code ${code}${signal ? `, signal ${signal}` : ''}`);
+  }
+}
+
+console.log(`\n${files.length - failed}/${files.length} integration test files passed`);
+process.exit(failed ? 1 : 0);

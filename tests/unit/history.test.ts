@@ -106,6 +106,13 @@ describe('history procedures', () => {
     expect(onChanged).toHaveBeenLastCalledWith({ id, kind: 'updated' });
   });
 
+  it('accepts command_failed for command rows without storing any selected text', () => {
+    const id = beginHistory(connection.db, { engine: 'whisper.cpp', mode: 'command' }, deps);
+    if (id === null) throw new Error('Command history did not begin');
+    expect(failHistory(connection.db, id, 'command_failed', 'oMLX request failed', deps)).toBe(true);
+    expect(row(id)).toMatchObject({ mode: 'command', status: 'failed', errorCode: 'command_failed', rawText: null, finalText: null });
+  });
+
   it('records insertion failure and then clears its error after successful insertion', async () => {
     const id = begin();
     await completeHistory(connection.db, id, completion, deps);

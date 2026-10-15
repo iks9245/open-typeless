@@ -81,6 +81,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       history: { ...previous.history, ...patch.history },
       input: { ...previous.input, ...patch.input },
       polish: { ...previous.polish, ...patch.polish },
+      command: { ...previous.command, ...patch.command },
     });
     const version = revision.current;
     try {

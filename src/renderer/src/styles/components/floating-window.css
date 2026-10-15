@@ -244,3 +244,15 @@ body {
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.8);
 }
+
+.floating-window__status {
+  position: relative;
+}
+
+.floating-window__mode {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}

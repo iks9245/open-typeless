@@ -9,9 +9,17 @@
 
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import log from 'electron-log';
+import type { InputMode } from '../../../shared/constants/command';
 import { permissionsService } from '../permissions';
 
 const logger = log.scope('keyboard-service');
+
+/** The parts of a uiohook keyboard event the service reads */
+interface KeyEventFlags {
+  keycode: number;
+  shiftKey: boolean;
+  altKey: boolean;
+}
 
 /**
  * Configuration for keyboard service.
@@ -66,14 +74,15 @@ export class KeyboardService {
     recordingStartTime: 0,
   };
 
-  private onKeyDown: (() => void) | null = null;
+  private onKeyDown: ((mode: InputMode) => void) | null = null;
   private onKeyUp: (() => void) | null = null;
   private onCancel: ((durationMs: number) => void) | null = null;
   private isStarted = false;
+  private readonly heldModifiers = new Set<number>();
 
   // Bound handlers for proper cleanup
-  private boundKeyDownHandler: ((e: { keycode: number }) => void) | null = null;
-  private boundKeyUpHandler: ((e: { keycode: number }) => void) | null = null;
+  private boundKeyDownHandler: ((e: KeyEventFlags) => void) | null = null;
+  private boundKeyUpHandler: ((e: KeyEventFlags) => void) | null = null;
 
   constructor(config: Partial<KeyboardConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -99,7 +108,7 @@ export class KeyboardService {
    * @returns true if the hook is running
    */
   register(
-    onKeyDown: () => void,
+    onKeyDown: (mode: InputMode) => void,
     onKeyUp: () => void,
     onCancel: (durationMs: number) => void,
   ): boolean {
@@ -114,8 +123,14 @@ export class KeyboardService {
     }
 
     // Create bound handlers
-    const keyDownHandler = (e: { keycode: number }) => this.handleKeyDown(e.keycode);
-    const keyUpHandler = (e: { keycode: number }) => this.handleKeyUp(e.keycode);
+    const keyDownHandler = (e: KeyEventFlags) => {
+      this.syncModifiers(e);
+      this.handleKeyDown(e.keycode, { shift: e.shiftKey });
+    };
+    const keyUpHandler = (e: KeyEventFlags) => {
+      this.syncModifiers(e);
+      this.handleKeyUp(e.keycode);
+    };
 
     // Register event listeners
     uIOhook.on('keydown', keyDownHandler);
@@ -189,10 +204,43 @@ export class KeyboardService {
     return this.state.isKeyHeld;
   }
 
+  /** Wait until both physical Shift and Option keys are up, with a bounded wait. */
+  async waitForModifiersReleased(timeoutMs: number): Promise<boolean> {
+    const started = Date.now();
+    while (this.heldModifiers.size) {
+      const remaining = timeoutMs - (Date.now() - started);
+      if (remaining <= 0) return false;
+      await new Promise(resolve => setTimeout(resolve, Math.min(20, remaining)));
+    }
+    return true;
+  }
+
+  /**
+   * Drop modifiers that an ordinary key event reports as up, so a missed key-up cannot leave
+   * waitForModifiersReleased() waiting forever. Modifier events are skipped: their own flags
+   * may not reflect the change yet.
+   */
+  private syncModifiers(e: KeyEventFlags): void {
+    if (this.isModifier(e.keycode)) return;
+    if (!e.shiftKey) {
+      this.heldModifiers.delete(UiohookKey.Shift);
+      this.heldModifiers.delete(UiohookKey.ShiftRight);
+    }
+    if (!e.altKey) {
+      this.heldModifiers.delete(UiohookKey.Alt);
+      this.heldModifiers.delete(UiohookKey.AltRight);
+    }
+  }
+
+  private isModifier(keycode: number): boolean {
+    return new Set<number>([UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Alt, UiohookKey.AltRight]).has(keycode);
+  }
+
   /**
    * Reset internal state.
    */
   private resetState(): void {
+    this.heldModifiers.clear();
     this.state = {
       isKeyHeld: false,
       lastKeyDownTime: 0,
@@ -210,7 +258,8 @@ export class KeyboardService {
   /**
    * Handle key down event.
    */
-  private handleKeyDown(keycode: number): void {
+  private handleKeyDown(keycode: number, modifiers?: { shift?: boolean }): void {
+    if (this.isModifier(keycode)) this.heldModifiers.add(keycode);
     // Ignore if not our trigger key
     if (keycode !== this.config.triggerKey) {
       return;
@@ -234,13 +283,15 @@ export class KeyboardService {
     logger.debug('Trigger key pressed');
 
     // Call callback
-    this.onKeyDown?.();
+    const shift = modifiers?.shift ?? (this.heldModifiers.has(UiohookKey.Shift) || this.heldModifiers.has(UiohookKey.ShiftRight));
+    this.onKeyDown?.(shift ? 'command' : 'dictation');
   }
 
   /**
    * Handle key up event.
    */
   private handleKeyUp(keycode: number): void {
+    this.heldModifiers.delete(keycode);
     // Ignore if not our trigger key
     if (keycode !== this.config.triggerKey) {
       return;

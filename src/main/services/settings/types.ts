@@ -6,6 +6,7 @@
 import log from 'electron-log';
 import { z } from 'zod';
 import type { AppSettings, AppSettingsPatch } from '../../../shared/types/settings';
+import { DEFAULT_COMMAND_MODEL } from '../../../shared/constants/command';
 import { DEFAULT_POLISH_MODEL } from '../../../shared/constants/polish';
 import { MAX_VOCABULARY_TERMS, MAX_VOCABULARY_TERM_LENGTH } from '../../../shared/lib/vocabulary-prompt';
 
@@ -51,6 +52,7 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
   asr: asrSchema,
   input: inputSchema,
   polish: polishSchema,
+  command: polishSchema,
 }).strict();
 
 export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
@@ -58,6 +60,7 @@ export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
   asr: asrSchema.partial().optional(),
   input: inputSchema.partial().optional(),
   polish: polishSchema.partial().optional(),
+  command: polishSchema.partial().optional(),
 }).strict();
 
 export const emptySettingsInputSchema = z.object({}).strict();
@@ -70,6 +73,8 @@ export const settingSchemas = {
   'asr.whisperServerUrl': asrSchema.shape.whisperServerUrl,
   'asr.vocabulary': asrSchema.shape.vocabulary,
   'input.autoInsert': inputSchema.shape.autoInsert,
+  'command.enabled': polishSchema.shape.enabled,
+  'command.model': polishSchema.shape.model,
   'polish.enabled': polishSchema.shape.enabled,
   'polish.model': polishSchema.shape.model,
 };
@@ -90,6 +95,8 @@ export function applySetting(target: AppSettings, key: SettingKey, value: unknow
     case 'asr.whisperServerUrl': target.asr.whisperServerUrl = value as string; break;
     case 'asr.vocabulary': target.asr.vocabulary = value as string[]; break;
     case 'input.autoInsert': target.input.autoInsert = value as boolean; break;
+    case 'command.enabled': target.command.enabled = value as boolean; break;
+    case 'command.model': target.command.model = value as string; break;
     case 'polish.enabled': target.polish.enabled = value as boolean; break;
     case 'polish.model': target.polish.model = value as string; break;
   }
@@ -109,5 +116,6 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
     },
     input: { autoInsert: true },
     polish: { enabled: false, model: DEFAULT_POLISH_MODEL },
+    command: { enabled: true, model: DEFAULT_COMMAND_MODEL },
   };
 }

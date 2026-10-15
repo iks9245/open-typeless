@@ -25,6 +25,7 @@ describe('settings', () => {
       asr: { language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
       input: { autoInsert: true },
       polish: { enabled: false, model: 'Qwen3.5-9B-4bit' },
+      command: { enabled: true, model: 'Qwen3.8-27B-oQ4e-mtp' },
     });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: defaults });
     expect(connection.db.select().from(settings).all()).toEqual([]);
@@ -46,10 +47,11 @@ describe('settings', () => {
       asr: { language: null, whisperServerUrl: 'https://example.com/whisper', vocabulary: [] },
       input: { autoInsert: false },
       polish: { enabled: true, model: 'custom-model' },
+      command: { enabled: false, model: 'custom-command' },
     };
     expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: patch });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: patch });
-    expect(connection.db.select().from(settings).all()).toHaveLength(9);
+    expect(connection.db.select().from(settings).all()).toHaveLength(11);
     expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.language'))
       .toEqual({ value: 'null', updated_at: now() });
   });
@@ -65,6 +67,17 @@ describe('settings', () => {
     });
   });
 
+  it('defaults command on and persists its model independently of polish', () => {
+    expect(getDefaultSettings({}).command).toEqual({ enabled: true, model: 'Qwen3.8-27B-oQ4e-mtp' });
+    expect(updateSettings(connection.db, { command: { model: '  command-model  ' } }, now, env)).toEqual({
+      success: true, data: { ...getDefaultSettings(env), command: { enabled: true, model: 'command-model' } },
+    });
+    expect(updateSettings(connection.db, { command: { enabled: false } }, now, env)).toEqual({
+      success: true, data: { ...getDefaultSettings(env), command: { enabled: false, model: 'command-model' } },
+    });
+    expect(connection.db.select().from(settings).all().map(row => row.key).sort()).toEqual(['command.enabled', 'command.model']);
+  });
+
   it('updates only provided keys and persists a null retention override', () => {
     updateSettings(connection.db, { history: { retentionDays: 7 }, asr: { language: 'en' } }, now, env);
     const later = () => now() + 1;
@@ -78,6 +91,11 @@ describe('settings', () => {
   });
 
   it.each([
+    { command: { enabled: 'yes' } },
+    { command: { model: '' } },
+    { command: { model: '   ' } },
+    { command: { model: 'a'.repeat(201) } },
+    { command: { unknown: true } },
     { polish: { enabled: 'yes' } },
     { polish: { model: '' } },
     { polish: { model: '  ' } },

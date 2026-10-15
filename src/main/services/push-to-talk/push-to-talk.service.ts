@@ -25,6 +25,8 @@ import { textInputService } from '../text-input';
 import { asrService } from '../asr';
 import type { ASRSessionOutcome } from '../asr';
 import { historyService } from '../history';
+import { commandService } from '../command';
+import { DEFAULT_COMMAND_MODEL, type InputMode } from '../../../shared/constants/command';
 import { polishService } from '../polish';
 import { settingsService } from '../settings';
 import { permissionsService } from '../permissions';
@@ -75,6 +77,9 @@ const DEFAULT_CONFIG: PushToTalkConfig = {
 export class PushToTalkService {
   private config: PushToTalkConfig;
   private isActive = false;
+  private finishing = false;
+  private mode: InputMode = 'dictation';
+  private commandModel = DEFAULT_COMMAND_MODEL;
   private isInitialized = false;
   /** History row of the active session; null when history is off or unavailable */
   private historyId: string | null = null;
@@ -171,7 +176,7 @@ export class PushToTalkService {
     }
 
     const started = keyboardService.register(
-      () => this.handleKeyDown(),
+      mode => this.handleKeyDown(mode),
       () => this.handleKeyUp(),
       (durationMs) => this.handleCancel(durationMs)
     );
@@ -250,8 +255,8 @@ export class PushToTalkService {
    * Handle key down event (trigger key pressed).
    * Starts ASR session and shows floating window.
    */
-  private async handleKeyDown(): Promise<void> {
-    if (this.isActive) {
+  private async handleKeyDown(mode: InputMode = 'dictation'): Promise<void> {
+    if (this.isActive || this.finishing) {
       logger.warn('Already recording, ignoring key down');
       return;
     }
@@ -261,10 +266,16 @@ export class PushToTalkService {
 
     // Best effort: returns null when history is disabled or storage is unavailable
     const settings = settingsService.get();
-    if (settings.success === true && settings.data.polish.enabled) {
+    this.mode = mode === 'command' && settings.success === true && settings.data.command.enabled ? 'command' : 'dictation';
+    floatingWindow.sendMode(this.mode);
+    if (this.mode === 'command') {
+      this.commandModel = settings.success === true ? settings.data.command.model : DEFAULT_COMMAND_MODEL;
+      commandService.warmUp(this.commandModel);
+    } else if (settings.success === true && settings.data.polish.enabled) {
       polishService.warmUp(settings.data.polish.model);
     }
     this.historyId = historyService.begin({
+      mode: this.mode,
       engine: 'whisper.cpp',
       language: settings.success ? settings.data.asr.language : null,
     });
@@ -326,6 +337,9 @@ export class PushToTalkService {
 
     logger.info('Push-to-talk: STOP');
     this.isActive = false;
+    this.finishing = true;
+    const mode = this.mode;
+    const commandModel = this.commandModel;
     const historyId = this.historyId;
     this.historyId = null;
 
@@ -339,12 +353,28 @@ export class PushToTalkService {
 
       // Stop ASR and get final result
       const settings = settingsService.get();
-      const outcome = await asrService.stopWithOutcome({
-        keepProcessing: settings.success === true && settings.data.polish.enabled,
-      });
+      // Attach the capture rejection handler immediately while ASR finishes in parallel.
+      const selection = mode === 'command'
+        ? commandService.captureSelection().then(text => ({ text, error: null }), error => ({
+          text: null,
+          error: error instanceof Error && error.message === 'Release Shift to run the command'
+            ? error.message : 'Selection capture failed',
+        }))
+        : Promise.resolve({ text: null, error: null });
+      const [outcome, captured] = await Promise.all([
+        asrService.stopWithOutcome({
+          keepProcessing: mode === 'command' || (settings.success === true && settings.data.polish.enabled),
+        }),
+        selection,
+      ]);
       const result = outcome.result;
 
-      if (result && result.text) {
+      if (mode === 'command' && outcome.error) {
+        this.failCommand(historyId, 'Transcription failed');
+        return;
+      }
+
+      if (result && result.text.trim()) {
         logger.info('ASR result received', {
           textLength: result.text.length,
           isFinal: result.isFinal,
@@ -352,7 +382,20 @@ export class PushToTalkService {
 
         let finalText = result.text;
         let polishLatencyMs = 0;
-        if (settings.success === true && settings.data.polish.enabled) {
+        if (mode === 'command') {
+          if (captured.error) {
+            this.failCommand(historyId, captured.error);
+            return;
+          }
+          const commanded = await commandService.run(result.text, captured.text, { model: commandModel });
+          if (commanded.error) {
+            this.failCommand(historyId, commanded.error);
+            return;
+          }
+          finalText = commanded.text;
+          polishLatencyMs = commanded.latencyMs;
+          logger.info('Command completed', { outputLength: finalText.length, latencyMs: commanded.latencyMs });
+        } else if (settings.success === true && settings.data.polish.enabled) {
           const polished = await polishService.polish(result.text, {
             model: settings.data.polish.model, vocabulary: settings.data.asr.vocabulary,
           });
@@ -369,7 +412,7 @@ export class PushToTalkService {
 
         // IMPORTANT: Hide floating window FIRST to return focus to the previous app
         // Then wait a bit for the focus to switch before inserting text
-        floatingWindow.hide();
+        if (mode === 'dictation') floatingWindow.hide();
 
         // Insert text at cursor position after focus returns
         let insert: { status: 'inserted' | 'failed' | 'skipped'; error?: string } = { status: 'skipped' };
@@ -406,6 +449,10 @@ export class PushToTalkService {
 
       logger.info('Push-to-talk session completed');
     } catch (error) {
+      if (mode === 'command') {
+        this.failCommand(historyId, 'Command failed');
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       logger.error('Failed to stop push-to-talk session', { error: message });
       historyService.fail(historyId, 'stop_failed', message);
@@ -415,7 +462,16 @@ export class PushToTalkService {
       setTimeout(() => {
         floatingWindow.hide();
       }, this.config.hideDelayMs * 2);
+    } finally {
+      this.finishing = false;
     }
+  }
+
+  /** Only pass fixed capture errors or the command service's sanitized error here. */
+  private failCommand(historyId: string | null, message: string): void {
+    logger.warn('Command session failed');
+    historyService.fail(historyId, 'command_failed', message);
+    floatingWindow.sendError(`指令失敗：${message}`);
   }
 
   /**

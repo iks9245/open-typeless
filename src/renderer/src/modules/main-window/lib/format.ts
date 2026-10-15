@@ -34,6 +34,7 @@ export function errorCodeLabel(code: string | null): string {
   switch (code) {
     case 'start_failed': return '無法連線到 whisper 伺服器';
     case 'transcription_failed': return '辨識失敗';
+    case 'command_failed': return '指令執行失敗';
     case 'stop_failed': return '結束錄音時出錯';
     case 'interrupted': return 'app 在錄音中被結束';
     default: return '發生未知錯誤';
@@ -64,7 +65,7 @@ export function polishReasonLabel(reason: PolishUnavailableReason | null): strin
   }
 }
 
-export function polishModelOptions(models: readonly string[], current: string): { id: string; label: string }[] {
+export function polishModelOptions(models: readonly string[], current: string, preferred?: string): { id: string; label: string }[] {
   const installed = new Set(models);
   const options: { id: string; label: string }[] = [];
   for (const { id, label } of RECOMMENDED_POLISH_MODELS) {
@@ -72,5 +73,5 @@ export function polishModelOptions(models: readonly string[], current: string): 
   }
   for (const id of [...installed].sort((a, b) => a.localeCompare(b))) options.push({ id, label: id });
   if (current && !models.includes(current)) options.push({ id: current, label: `${current}（未安裝）` });
-  return options;
+  return preferred ? options.sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred)) : options;
 }

@@ -1,0 +1,29 @@
+{
+  "id": "command-mode",
+  "name": "command-mode",
+  "title": "Command mode: rewrite selection or generate by voice",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "priority": "P1",
+  "creator": "iks9245",
+  "assignee": "iks9245",
+  "createdAt": "2026-10-15",
+  "completedAt": null,
+  "branch": "feat/command-mode",
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 0,
+  "next_action": [
+    {"phase": 1, "action": "implement"},
+    {"phase": 2, "action": "check"},
+    {"phase": 3, "action": "finish"},
+    {"phase": 4, "action": "create-pr"}
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "relatedFiles": [],
+  "notes": ""
+}

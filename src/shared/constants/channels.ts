@@ -15,6 +15,7 @@ export const IPC_CHANNELS = {
     ERROR: 'asr:error',
   },
   FLOATING_WINDOW: {
+    MODE: 'floating-window:mode',
     /** Set content height for adaptive window sizing (Renderer -> Main) */
     SET_CONTENT_HEIGHT: 'floating-window:set-content-height',
   },

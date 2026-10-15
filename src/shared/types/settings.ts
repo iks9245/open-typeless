@@ -19,6 +19,10 @@ export interface AppSettings {
     enabled: boolean;
     model: string;
   };
+  command: {
+    enabled: boolean;
+    model: string;
+  };
   input: {
     autoInsert: boolean;
   };
@@ -28,5 +32,6 @@ export interface AppSettingsPatch {
   history?: Partial<AppSettings['history']>;
   asr?: Partial<AppSettings['asr']>;
   polish?: Partial<AppSettings['polish']>;
+  command?: Partial<AppSettings['command']>;
   input?: Partial<AppSettings['input']>;
 }

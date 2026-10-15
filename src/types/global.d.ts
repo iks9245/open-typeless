@@ -3,6 +3,7 @@
  * Extends the Window interface with the exposed API.
  */
 
+import type { ReportInput, SpeechReport } from '../shared/types/report';
 import type { LoginItemState } from '../shared/types/system';
 import type { InputMode } from '../shared/constants/command';
 import type { ASRResult, ASRStatus } from '../shared/types/asr';
@@ -136,6 +137,10 @@ export interface AppApi {
   history: HistoryApi;
   settings: SettingsApi;
   whisperServer: WhisperServerApi;
+  report: {
+    get: (input: ReportInput) => Promise<IpcResult<SpeechReport>>;
+    comment: (input: ReportInput) => Promise<IpcResult<{ text: string }>>;
+  };
   polish: { getStatus: () => Promise<IpcResult<PolishInfo>> };
 }
 

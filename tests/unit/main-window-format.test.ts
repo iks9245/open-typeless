@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
+import { formatReportDuration, formatReportNumber, polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
 
 describe('history time formatting', () => {
   const now = new Date(2026, 9, 15, 12, 0);
@@ -103,5 +103,19 @@ describe('polish labels and model choices', () => {
     expect(polishModelOptions([], 'Qwen3.5-9B-4bit')).toEqual([{ id: 'Qwen3.5-9B-4bit', label: 'Qwen3.5-9B-4bit（未安裝）' }]);
     expect(polishModelOptions(['Alpha'], 'Alpha')).toEqual([{ id: 'Alpha', label: 'Alpha' }]);
     expect(polishModelOptions([], '')).toEqual([]);
+  });
+});
+
+describe('report formatting', () => {
+  it.each([
+    [0, '0 秒'], [999, '0 秒'], [59999, '59 秒'], [60000, '1 分鐘'], [3599999, '59 分鐘'],
+    [3600000, '1 小時 0 分'], [7500000, '2 小時 5 分'], [null, '—'], [-1, '—'], [NaN, '—'], [Infinity, '—'],
+  ])('formats report duration %s as %s', (value, expected) => {
+    expect(formatReportDuration(value)).toBe(expected);
+  });
+  it('uses Traditional Chinese number grouping and rounds speed to whole numbers', () => {
+    expect(formatReportNumber(12345)).toBe('12,345');
+    expect(formatReportNumber(123.8)).toBe('124');
+    expect(formatReportNumber(NaN)).toBe('—');
   });
 });

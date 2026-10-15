@@ -1,19 +1,55 @@
 /**
- * Sender validation for history and settings IPC requests.
+ * Window registration, navigation boundaries and IPC sender validation.
+ * Register before loading the renderer so its first main-frame URL is pinned.
  */
 
-/**
- * Trust packaged file pages and configured Vite development server pages.
- */
-export function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
-  if (!event.senderFrame) return false;
+import type { Event, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron';
 
-  const url = event.senderFrame.url;
-  return url.startsWith('file://') ||
-    (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'string' &&
-      MAIN_WINDOW_VITE_DEV_SERVER_URL.length > 0 &&
-      url.startsWith(MAIN_WINDOW_VITE_DEV_SERVER_URL)) ||
-    (typeof FLOATING_WINDOW_VITE_DEV_SERVER_URL === 'string' &&
-      FLOATING_WINDOW_VITE_DEV_SERVER_URL.length > 0 &&
-      url.startsWith(FLOATING_WINDOW_VITE_DEV_SERVER_URL));
+export type WindowRole = 'main' | 'floating';
+
+interface TrustedWindow {
+  role: WindowRole;
+  url: string | null;
+}
+
+const trustedWindows = new WeakMap<WebContents, TrustedWindow>();
+
+export function registerTrustedWindow(webContents: WebContents, role: WindowRole): void {
+  if (webContents.isDestroyed() || trustedWindows.has(webContents)) return;
+
+  const currentUrl = webContents.getURL();
+  const registration: TrustedWindow = {
+    role,
+    url: currentUrl && currentUrl !== 'about:blank' ? currentUrl : null,
+  };
+  trustedWindows.set(webContents, registration);
+
+  // did-start-navigation runs before preload/renderer IPC, including on loadFile.
+  // Never update this URL on subsequent navigation or redirects.
+  const pinUrl = (_event: Event, url: string, _isInPlace: boolean, isMainFrame: boolean): void => {
+    if (!isMainFrame || registration.url !== null) return;
+    registration.url = url;
+    webContents.removeListener('did-start-navigation', pinUrl);
+  };
+  if (registration.url === null) webContents.on('did-start-navigation', pinUrl);
+
+  const restrictNavigation = (event: Event, url: string): void => {
+    if (url !== registration.url) event.preventDefault();
+  };
+  webContents.on('will-navigate', restrictNavigation);
+  webContents.on('will-redirect', restrictNavigation);
+  webContents.once('destroyed', () => trustedWindows.delete(webContents));
+}
+
+/** Only a registered window still showing its original page has a trusted role. */
+export function getTrustedWindowRole(webContents: WebContents | null): WindowRole | undefined {
+  if (!webContents || webContents.isDestroyed()) return undefined;
+  const registration = trustedWindows.get(webContents);
+  if (!registration?.url || webContents.mainFrame.url !== registration.url) return undefined;
+  return registration.role;
+}
+
+export function isTrustedSender(event: IpcMainEvent | IpcMainInvokeEvent, role: WindowRole): boolean {
+  return getTrustedWindowRole(event.sender) === role &&
+    event.senderFrame === event.sender.mainFrame;
 }

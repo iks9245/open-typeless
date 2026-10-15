@@ -7,6 +7,7 @@ import { BrowserWindow, screen } from 'electron';
 import path from 'node:path';
 import type { ASRResult, ASRStatus } from '../../shared/types/asr';
 import { IPC_CHANNELS } from '../../shared/constants/channels';
+import { registerTrustedWindow } from '../ipc/sender';
 
 /**
  * Floating window layout configuration constants.
@@ -95,9 +96,10 @@ export class FloatingWindowManager {
       vibrancy: 'popover',
       fullscreenable: false,
       webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
+        preload: path.join(__dirname, 'preload-floating.js'),
         contextIsolation: true,
         nodeIntegration: false,
+        sandbox: true,
       },
     });
 
@@ -106,19 +108,7 @@ export class FloatingWindowManager {
     // NOTE: Temporarily disabled - may cause dock icon to hide on macOS
     // this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-    // Block navigation to external URLs
-    this.window.webContents.on('will-navigate', (event, url) => {
-      const allowedOrigins = [
-        FLOATING_WINDOW_VITE_DEV_SERVER_URL,
-        'file://',
-      ].filter((origin): origin is string => Boolean(origin));
-      const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
-      if (!isAllowed) {
-        event.preventDefault();
-      }
-    });
-
-    this.window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    registerTrustedWindow(this.window.webContents, 'floating');
 
     // Load the floating window HTML
     if (FLOATING_WINDOW_VITE_DEV_SERVER_URL) {

@@ -4,7 +4,7 @@
  */
 
 import path from 'node:path';
-import { clipboard, nativeTheme } from 'electron';
+import { BrowserWindow, clipboard, nativeTheme } from 'electron';
 import { count } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { assert, run, test, until } from './harness';
@@ -52,6 +52,34 @@ run(async () => {
   const ui = await openMainWindow();
   // Screenshots named *-light/*-dark must not depend on the system appearance
   nativeTheme.themeSource = 'light';
+
+  await test('the main preload exposes only the main window API', async () => {
+    const keys = await ui.exec<{ api: string[]; asr: string[] }>(`({
+      api: Object.keys(window.api).sort(), asr: Object.keys(window.api.asr).sort()
+    })`);
+    assert(JSON.stringify(keys.api) === JSON.stringify(['asr', 'history', 'polish', 'settings', 'whisperServer']),
+      'main API has no floatingWindow key', keys);
+    assert(JSON.stringify(keys.asr) === JSON.stringify(['onError', 'onResult', 'onStatus', 'sendAudio']),
+      'ASR API has no start or stop keys', keys);
+  });
+
+  await test('the same local page in an unregistered window cannot invoke settings', async () => {
+    const html = process.env.INTEGRATION_RENDERER_HTML;
+    const preload = process.env.INTEGRATION_PRELOAD;
+    assert(html && preload, 'renderer and preload built');
+    const untrusted = new BrowserWindow({
+      show: false,
+      webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    try {
+      await untrusted.loadFile(html);
+      const result = await untrusted.webContents.executeJavaScript('window.api.settings.get()');
+      assert(JSON.stringify(result) === JSON.stringify({ success: false, error: 'Untrusted sender' }),
+        'unregistered sender rejected', result);
+    } finally {
+      untrusted.destroy();
+    }
+  });
 
   await test('history shows 50 items first and loads the rest on request', async () => {
     await ui.waitFor('history-item', { count: 50 });
@@ -225,6 +253,12 @@ run(async () => {
     await ui.click('tab-settings');
     await ui.screenshot('6-settings-dark');
     nativeTheme.themeSource = 'system';
+  });
+
+  await test('the exercised UI has no securitypolicyviolation events', async () => {
+    // Let pending CSP events and console diagnostics reach the main process.
+    await ui.exec('new Promise((resolve) => setTimeout(resolve, 50))');
+    assert(ui.securityPolicyViolations.length === 0, 'zero CSP violations', ui.securityPolicyViolations);
   });
 
   ui.window.destroy();

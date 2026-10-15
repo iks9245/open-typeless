@@ -13,7 +13,7 @@ export function setupPolishHandlers(): void {
   if (handlersRegistered) return;
   ipcMain.handle(IPC_CHANNELS.POLISH.STATUS, async (event): Promise<IpcResult<PolishInfo>> => {
     try {
-      if (!isTrustedSender(event)) return { success: false, error: 'Untrusted sender' };
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
       return { success: true, data: await polishService.status() };
     } catch {
       logger.error('Failed to read oMLX status');

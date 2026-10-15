@@ -2,6 +2,7 @@
 /**
  * Checks a packaged macOS build (run `pnpm package` first) for problems that only
  * appear after packaging:
+ * - both preload bundles and renderer Content-Security-Policy meta tags
  * - migrations shipped in Resources/drizzle
  * - runtime modules required by the main bundle present in app.asar
  * - code signature identifier matching CFBundleIdentifier (needed for the
@@ -36,7 +37,18 @@ const migrations = path.join(resources, 'drizzle');
 check(existsSync(path.join(migrations, 'meta', '_journal.json')) &&
   readdirSync(migrations).some((name) => name.endsWith('.sql')), 'migrations are in Resources/drizzle');
 
-const files = new Set(asar.listPackage(path.join(resources, 'app.asar')).map((file) => file.replaceAll('\\', '/')));
+const archive = path.join(resources, 'app.asar');
+const files = new Set(asar.listPackage(archive).map((file) => file.replaceAll('\\', '/')));
+for (const preload of ['preload.js', 'preload-floating.js']) {
+  check(files.has(`/.vite/build/${preload}`), `${preload} is packaged`);
+}
+for (const page of ['main_window/index.html', 'floating_window/floating.html']) {
+  const file = `.vite/renderer/${page}`;
+  const html = files.has(`/${file}`) ? asar.extractFile(archive, file).toString('utf8') : '';
+  check(/<meta\b[^>]*http-equiv=["']Content-Security-Policy["'][^>]*content=["'][^"']+/i.test(html),
+    `${page} contains the CSP meta tag`);
+}
+
 const hasModule = (name) => files.has(`/node_modules/${name}/package.json`);
 for (const name of ['ws', 'better-sqlite3', 'uiohook-napi', '@xitanggg/node-insert-text']) {
   check(hasModule(name), `${name} is packaged`);

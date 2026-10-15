@@ -3,6 +3,7 @@
  * Used by the floating window to display real-time ASR state.
  */
 
+import { floatingApi } from '../../../../floating/api';
 import { useEffect, useState, useCallback } from 'react';
 import type { ASRResult, ASRStatus } from '../../../../../shared/types/asr';
 
@@ -52,7 +53,7 @@ export function useASRStatus(): UseASRStatusReturn {
   // Subscribe to ASR events
   useEffect(() => {
     // Clear error when status changes (except to error state)
-    const unsubscribeStatus = window.api.asr.onStatus((newStatus) => {
+    const unsubscribeStatus = floatingApi.asr.onStatus((newStatus) => {
       setStatus(newStatus);
       if (newStatus !== 'error') {
         setError(null);
@@ -63,11 +64,11 @@ export function useASRStatus(): UseASRStatusReturn {
       }
     });
 
-    const unsubscribeResult = window.api.asr.onResult((newResult) => {
+    const unsubscribeResult = floatingApi.asr.onResult((newResult) => {
       setResult(newResult);
     });
 
-    const unsubscribeError = window.api.asr.onError((errorMessage) => {
+    const unsubscribeError = floatingApi.asr.onError((errorMessage) => {
       setError(errorMessage);
       setStatus('error');
     });

@@ -9,11 +9,14 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import { wait } from './harness';
+import { registerTrustedWindow } from '../../src/main/ipc/sender';
 
 export interface UiDriver {
   window: BrowserWindow;
   /** Renderer console output, for checks such as the recording hook */
   console: string[];
+  /** CSP reports captured from initial load through the last UI interaction. */
+  securityPolicyViolations: string[];
   exec<T>(script: string): Promise<T>;
   waitFor(testId: string, options?: { count?: number; timeoutMs?: number }): Promise<void>;
   waitUntil(description: string, script: string, timeoutMs?: number): Promise<void>;
@@ -48,14 +51,26 @@ export async function openMainWindow(): Promise<UiDriver> {
     // Hidden windows are throttled and would capture stale frames without this
     webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
+  registerTrustedWindow(window.webContents, 'main');
   // Never let tests reach the real microphone (and a macOS permission prompt)
   window.webContents.session.setPermissionRequestHandler((_contents, permission, callback) => callback(permission !== 'media'));
   window.webContents.session.setPermissionCheckHandler((_contents, permission) => permission !== 'media');
   const consoleLines: string[] = [];
-  window.webContents.on('console-message', (_event, _level, message) => consoleLines.push(message));
+  const securityPolicyViolations: string[] = [];
+  // Capture CSP diagnostics before load, including violations before React mounts.
+  window.webContents.on('console-message', (_event, _level, message) => {
+    consoleLines.push(message);
+    if (/Content Security Policy|securitypolicyviolation/i.test(message)) {
+      securityPolicyViolations.push(message);
+    }
+  });
   await window.loadFile(html);
 
   const exec = <T>(script: string): Promise<T> => window.webContents.executeJavaScript(script, true) as Promise<T>;
+
+  await exec(`document.addEventListener('securitypolicyviolation', (event) => {
+    console.error('securitypolicyviolation: ' + event.violatedDirective + ' ' + event.blockedURI);
+  })`);
 
   const waitUntil = async (description: string, script: string, timeoutMs = 5000): Promise<void> => {
     const deadline = Date.now() + timeoutMs;
@@ -69,6 +84,7 @@ export async function openMainWindow(): Promise<UiDriver> {
   const driver: UiDriver = {
     window,
     console: consoleLines,
+    securityPolicyViolations,
     exec,
     waitUntil,
     waitFor: (testId, options = {}) => waitUntil(

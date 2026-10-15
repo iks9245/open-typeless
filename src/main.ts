@@ -1,9 +1,11 @@
 import 'dotenv/config';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import log from 'electron-log';
 import { setupAllIpcHandlers } from './main/ipc';
+import { registerTrustedWindow } from './main/ipc/sender';
+import { installPermissionHandlers } from './main/security/permissions';
 import { floatingWindow } from './main/windows';
 import { pushToTalkService } from './main/services';
 import { closeDatabase, initDatabase } from './main/db';
@@ -17,6 +19,12 @@ const logger = log.scope('main');
 if (started) {
   app.quit();
 }
+
+// Apply to every web contents, including windows created outside our managers.
+app.on('web-contents-created', (_event, contents) => {
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-attach-webview', (event) => event.preventDefault());
+});
 
 // Setup IPC handlers before app is ready
 setupAllIpcHandlers();
@@ -37,6 +45,8 @@ const createWindow = () => {
     },
   });
 
+  registerTrustedWindow(mainWindow.webContents, 'main');
+
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -46,22 +56,8 @@ const createWindow = () => {
     );
   }
 
-  // Block navigation to external URLs
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    const allowedOrigins = [
-      MAIN_WINDOW_VITE_DEV_SERVER_URL,
-      'file://',
-    ].filter((origin): origin is string => Boolean(origin));
-    const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
-    if (!isAllowed) {
-      event.preventDefault();
-    }
-  });
-
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-
   // Open DevTools in development only
-  if (process.env.NODE_ENV !== 'production') {
+  if (!app.isPackaged && process.env.OPEN_DEVTOOLS !== '0') {
     mainWindow.webContents.openDevTools();
   }
 
@@ -100,6 +96,7 @@ const initStorage = (): void => {
 // Some APIs can only be used after this event occurs.
 // Storage is initialized once here, not in createWindow (which also runs on 'activate').
 app.on('ready', () => {
+  installPermissionHandlers(session.defaultSession);
   initStorage();
   // Start (or find) the local whisper.cpp server in the background; it reads its URL from
   // settings, so storage comes first. Never rejects; failures are logged.

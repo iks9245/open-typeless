@@ -207,9 +207,20 @@ pnpm make           # 建置安裝檔
 
 ### 打包與簽章
 
-沒有設定簽章憑證時，打包流程會對 `.app` 進行 ad-hoc 簽章，讓簽章識別碼與 bundle ID（`com.electron.open-typeless`）一致，否則 macOS 不會跳出麥克風授權。
+打包後會重新簽章 `.app`，讓簽章識別碼與 bundle ID（`com.electron.open-typeless`）一致，否則 macOS 不會跳出麥克風授權。簽章身分依序選用：
 
-ad-hoc 簽章在每次重新打包後都會改變，macOS 可能會再次詢問鑰匙圈、麥克風與輔助使用權限。正式發佈前，需要在 `forge.config.ts` 的 `packagerConfig.osxSign` 設定固定的簽章憑證。
+1. 環境變數 `CODESIGN_IDENTITY`
+2. 鑰匙圈中名為 `Open Typeless Dev` 的程式碼簽署憑證
+3. 都沒有時改用 ad-hoc 簽章（例如 CI）
+
+ad-hoc 簽章在每次重新打包後都會改變，macOS 會再次詢問麥克風與輔助使用權限。本機開發建議建立固定的自簽憑證：
+
+1. 打開「鑰匙圈存取」，選單選「憑證輔助程式 → 製作憑證⋯」。
+2. 名稱填 `Open Typeless Dev`，身分類型選「自簽根憑證」，憑證類型選「程式碼簽署」，按「製作」。
+3. 第一次打包時，在鑰匙圈提示中輸入登入密碼並按「永遠允許」。
+4. 新簽章的 app 需要重新授權一次：在「系統設定 → 隱私權與安全性 → 輔助使用」移除舊的 open-typeless 後重新加入，並在啟動時允許麥克風。之後重新打包，權限都會保留。
+
+`pnpm verify:package` 會顯示這次的簽章方式。正式發佈前，需要在 `forge.config.ts` 的 `packagerConfig.osxSign` 設定 Apple Developer ID 憑證。
 
 ## 技術架構
 

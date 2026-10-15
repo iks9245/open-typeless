@@ -14,6 +14,27 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+/** Self-signed certificate created in Keychain Access for local builds (see README) */
+const LOCAL_SIGNING_IDENTITY = 'Open Typeless Dev';
+
+/**
+ * The identity used to sign a macOS build: CODESIGN_IDENTITY when set, else the local
+ * self-signed certificate when it is in the keychain, else '-' (ad-hoc).
+ * A stable identity keeps macOS privacy grants (microphone, Accessibility) across rebuilds;
+ * an ad-hoc signature changes with every build, so macOS asks again.
+ */
+async function signingIdentity(): Promise<string> {
+  if (process.env.CODESIGN_IDENTITY) return process.env.CODESIGN_IDENTITY;
+  try {
+    // Without -v: a self-signed root is not trusted for policy checks but can still sign
+    const { stdout } = await execFileAsync('security', ['find-identity', '-p', 'codesigning']);
+    if (stdout.includes(`"${LOCAL_SIGNING_IDENTITY}"`)) return LOCAL_SIGNING_IDENTITY;
+  } catch {
+    // No keychain access (for example on CI): fall back to ad-hoc
+  }
+  return '-';
+}
+
 // Native modules that need special handling for packaging
 const nativeModules = [
   'uiohook-napi',
@@ -64,20 +85,21 @@ const config: ForgeConfig = {
         }),
       );
     },
-    // Without a signing identity, re-sign the finished macOS bundle ad-hoc so its
-    // code signature identifier matches CFBundleIdentifier. The fuses plugin signs
-    // earlier, while the bundle is still Electron.app (com.github.Electron), and
-    // macOS privacy (TCC) then never prompts for or lists the renamed app's
-    // microphone access, so recordings are silent.
+    // Without osxSign, re-sign the finished macOS bundle so its code signature identifier
+    // matches CFBundleIdentifier. The fuses plugin signs earlier, while the bundle is still
+    // Electron.app (com.github.Electron), and macOS privacy (TCC) then never prompts for or
+    // lists the renamed app's microphone access, so recordings are silent.
     postPackage: async (forgeConfig, { platform, outputPaths }) => {
       if (platform !== 'darwin' || forgeConfig.packagerConfig.osxSign) {
         return;
       }
 
+      const identity = await signingIdentity();
+      console.log(identity === '-' ? 'Signing ad-hoc (no stable identity found)' : `Signing with "${identity}"`);
       for (const outputPath of outputPaths) {
         const bundles = (await readdir(outputPath)).filter((entry) => entry.endsWith('.app'));
         for (const bundle of bundles) {
-          await execFileAsync('codesign', ['--force', '--deep', '--sign', '-', path.join(outputPath, bundle)]);
+          await execFileAsync('codesign', ['--force', '--deep', '--sign', identity, path.join(outputPath, bundle)]);
         }
       }
     },

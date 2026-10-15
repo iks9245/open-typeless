@@ -60,7 +60,7 @@ check(existsSync(path.join(resources, 'app.asar.unpacked', 'node_modules', 'bett
 
 const bundleId = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', path.join(app, 'Contents', 'Info.plist')]).toString().trim();
 // codesign -dv prints its details on stderr
-const signature = spawnSync('codesign', ['-dv', app], { encoding: 'utf8' }).stderr;
+const signature = spawnSync('codesign', ['-dvv', app], { encoding: 'utf8' }).stderr;
 const identifier = signature.match(/^Identifier=(.+)$/m)?.[1];
 check(identifier === bundleId, `signature identifier ${identifier} matches bundle id ${bundleId}`);
 let validSignature = true;
@@ -70,6 +70,9 @@ try {
   validSignature = false;
 }
 check(validSignature, 'codesign --verify --deep --strict passes');
+// Informational: an ad-hoc build loses macOS privacy grants on every rebuild
+const authority = signature.match(/^Authority=(.+)$/m)?.[1];
+console.log(`ℹ signed ${/^Signature=adhoc$/m.test(signature) ? 'ad-hoc' : `by "${authority ?? 'unknown'}"`}`);
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} packaging check(s) failed`);

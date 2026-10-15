@@ -7,7 +7,7 @@ import path from 'node:path';
 import { BrowserWindow, clipboard, nativeTheme } from 'electron';
 import { count } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { assert, run, test, until } from './harness';
+import { assert, run, test, until, wait } from './harness';
 import { openMainWindow } from './ui';
 
 run(async () => {
@@ -109,9 +109,15 @@ run(async () => {
     assert(await ui.exec<boolean>(`document.querySelector('[data-testid="history-copy"]').disabled`), 'copy disabled for the empty session at the top');
     clipboard.clear();
     // navigator.clipboard needs a focused document, as when a user clicks the button
+    // Focus arrives asynchronously, and slower CI runners need more than one request
     ui.window.show();
-    ui.window.focus();
-    ui.window.webContents.focus();
+    const focusDeadline = Date.now() + 5000;
+    while (!(await ui.exec<boolean>('document.hasFocus()')) && Date.now() < focusDeadline) {
+      ui.window.focus();
+      ui.window.webContents.focus();
+      await wait(100);
+    }
+    assert(await ui.exec<boolean>('document.hasFocus()'), 'main window document focused');
     // Copy is disabled for sessions without text, so use the first item that has some
     const first = await ui.exec<string>(`(() => {
       const item = [...document.querySelectorAll('[data-testid="history-item"]')]

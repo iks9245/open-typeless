@@ -48,10 +48,12 @@ const inputSchema = z.object({
   autoInsert: z.boolean(),
   triggerKey: z.enum(TRIGGER_KEYS.map(key => key.id)),
 }).strict();
-const polishSchema = z.object({
+const commandSchema = z.object({
   enabled: z.boolean(),
   model: z.string().trim().min(1).max(200),
 }).strict();
+
+const polishSchema = commandSchema.extend({ style: z.enum(['auto', 'standard', 'cantonese']) });
 
 export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
   memory: memorySchema,
@@ -59,7 +61,7 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
   asr: asrSchema,
   input: inputSchema,
   polish: polishSchema,
-  command: polishSchema,
+  command: commandSchema,
 }).strict();
 
 export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
@@ -68,7 +70,7 @@ export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
   asr: asrSchema.partial().optional(),
   input: inputSchema.partial().optional(),
   polish: polishSchema.partial().optional(),
-  command: polishSchema.partial().optional(),
+  command: commandSchema.partial().optional(),
 }).strict();
 
 export const emptySettingsInputSchema = z.object({}).strict();
@@ -83,10 +85,11 @@ export const settingSchemas = {
   'asr.vocabulary': asrSchema.shape.vocabulary,
   'input.autoInsert': inputSchema.shape.autoInsert,
   'input.triggerKey': inputSchema.shape.triggerKey,
-  'command.enabled': polishSchema.shape.enabled,
-  'command.model': polishSchema.shape.model,
+  'command.enabled': commandSchema.shape.enabled,
+  'command.model': commandSchema.shape.model,
   'polish.enabled': polishSchema.shape.enabled,
   'polish.model': polishSchema.shape.model,
+  'polish.style': polishSchema.shape.style,
 };
 
 export type SettingKey = keyof typeof settingSchemas;
@@ -111,6 +114,7 @@ export function applySetting(target: AppSettings, key: SettingKey, value: unknow
     case 'command.model': target.command.model = value as string; break;
     case 'polish.enabled': target.polish.enabled = value as boolean; break;
     case 'polish.model': target.polish.model = value as string; break;
+    case 'polish.style': target.polish.style = value as AppSettings['polish']['style']; break;
   }
 }
 
@@ -128,7 +132,7 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
       vocabulary: [],
     },
     input: { autoInsert: true, triggerKey: 'right-option' },
-    polish: { enabled: false, model: DEFAULT_POLISH_MODEL },
+    polish: { enabled: false, model: DEFAULT_POLISH_MODEL, style: 'auto' },
     command: { enabled: true, model: DEFAULT_COMMAND_MODEL },
   };
 }

@@ -1,5 +1,6 @@
+import { getDefaultSettings } from '../../src/main/services/settings/types';
 import { describe, expect, it } from 'vitest';
-import { formatReportDuration, formatReportNumber, polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
+import { formatReportDuration, formatReportNumber, polishStyleModelHint, polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
 
 describe('history time formatting', () => {
   const now = new Date(2026, 9, 15, 12, 0);
@@ -75,6 +76,20 @@ describe('server labels and unexpected errors', () => {
 });
 
 describe('polish labels and model choices', () => {
+  it('warns for Cantonese with a non-27B model and follows language and style overrides', () => {
+    const settings = getDefaultSettings({});
+    expect(polishStyleModelHint(settings)).toBeNull();
+    settings.asr.language = 'yue';
+    expect(polishStyleModelHint(settings)).toContain('Qwen3.8-27B');
+    settings.polish.style = 'standard';
+    expect(polishStyleModelHint(settings)).toBeNull();
+    settings.asr.language = 'en';
+    settings.polish.style = 'cantonese';
+    expect(polishStyleModelHint(settings)).toContain('較常改錯');
+    settings.polish.model = 'Qwen3.8-27B-oQ4e-mtp';
+    expect(polishStyleModelHint(settings)).toBeNull();
+  });
+
   it('explains each unavailability reason', () => {
     expect(polishReasonLabel('not-installed')).toBe('找不到 oMLX，請先安裝並啟動 oMLX。');
     expect(polishReasonLabel('unreachable')).toBe('oMLX 未啟動或無法連線。');

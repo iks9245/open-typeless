@@ -1,3 +1,4 @@
+import { effectivePolishStyle } from '../../../shared/lib/polish-style';
 import { memoryService } from '../memory';
 /**
  * Push-to-Talk Service.
@@ -421,6 +422,7 @@ export class PushToTalkService {
         } else if (settings.success === true && settings.data.polish.enabled) {
           const polished = await polishService.polish(result.text, {
             model: settings.data.polish.model, vocabulary: settings.data.asr.vocabulary,
+            style: effectivePolishStyle(settings.data),
           });
           finalText = polished.text;
           polishLatencyMs = polished.latencyMs;

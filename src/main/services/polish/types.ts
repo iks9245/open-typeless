@@ -1,9 +1,16 @@
+import type { EffectivePolishStyle } from '../../../shared/lib/polish-style';
 import type { AppSettings } from '../../../shared/types/settings';
 import type { SettingsResult, SettingsService } from '../settings/types';
 
 export interface OmlxConfig {
   baseUrl: string;
   apiKey: string | null;
+}
+
+export interface PolishOptions {
+  model: string;
+  vocabulary: readonly string[];
+  style?: EffectivePolishStyle;
 }
 
 export interface PolishOutcome {

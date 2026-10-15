@@ -1,3 +1,5 @@
+import { effectivePolishStyle } from '../../../../../shared/lib/polish-style';
+import type { AppSettings } from '../../../../../shared/types/settings';
 import type { PolishUnavailableReason } from '../../../../../shared/types/polish';
 import { RECOMMENDED_POLISH_MODELS } from '../../../../../shared/constants/polish';
 import type { InsertStatus, TranscriptionStatus } from '../../../../../shared/constants/history';
@@ -63,6 +65,11 @@ export function polishReasonLabel(reason: PolishUnavailableReason | null): strin
     case 'unauthorized': return 'oMLX 拒絕連線，請檢查 API 金鑰設定。';
     default: return 'oMLX 未啟動或無法連線。';
   }
+}
+
+export function polishStyleModelHint(settings: AppSettings): string | null {
+  return effectivePolishStyle(settings) === 'cantonese' && !settings.polish.model.includes('27B')
+    ? '目前模型較常改錯粵語口語，建議改用 Qwen3.8-27B。' : null;
 }
 
 export function polishModelOptions(models: readonly string[], current: string, preferred?: string): { id: string; label: string }[] {

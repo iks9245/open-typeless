@@ -264,6 +264,37 @@ run(async () => {
     assert(await ui.exec<boolean>(`document.querySelector('[data-testid="settings-polish-model"]').disabled`), 'model select disabled');
   });
 
+  await test('polish style saves, preserves other polish settings and updates Cantonese guidance', async () => {
+    const previous = settings();
+    try {
+      settingsService.update({ asr: { language: 'en' }, polish: { style: 'auto', model: 'Qwen3.5-9B-4bit' } });
+      await ui.click('tab-settings');
+      await ui.waitUntil('style select ready', `document.querySelector('[data-testid="settings-polish-style"]')?.value === 'auto' && !document.querySelector('[data-testid="settings-polish-style"]').disabled`);
+      assert(await ui.count('polish-style-model-hint') === 0, 'auto with English has no model warning');
+      await ui.select('settings-polish-style', 'cantonese');
+      await until('Cantonese style saved', () => settings().polish.style === 'cantonese');
+      await ui.waitFor('polish-style-model-hint');
+      assert((await ui.text('polish-style-model-hint')).includes('Qwen3.8-27B'), 'non-27B model warning');
+      assert(await ui.exec<boolean>(`document.querySelector('[aria-labelledby="polish-heading"]').textContent.includes('會把辨識結果還原成粵語口語，每句約多 2–3 秒。建議使用 Qwen3.8-27B，9B 較常改錯。')`), 'Cantonese help shown');
+      assert(settings().polish.model === 'Qwen3.5-9B-4bit' && settings().polish.enabled === previous.polish.enabled, 'style update preserves model and enablement');
+      await ui.waitUntil('style save finished', `!document.querySelector('[data-testid="settings-polish-style"]').disabled`);
+      await ui.select('settings-polish-style', 'standard');
+      await until('standard style saved', () => settings().polish.style === 'standard');
+      await ui.waitFor('polish-style-model-hint', { count: 0 });
+      settingsService.update({ asr: { language: 'yue' } });
+      await ui.waitUntil('language broadcast received', `document.querySelector('[data-testid="settings-language"]').value === 'yue' && !document.querySelector('[data-testid="settings-polish-style"]').disabled`);
+      assert(await ui.count('polish-style-model-hint') === 0, 'standard overrides Cantonese language');
+      await ui.select('settings-polish-style', 'auto');
+      await until('auto style saved', () => settings().polish.style === 'auto');
+      await ui.waitFor('polish-style-model-hint');
+      settingsService.update({ polish: { model: 'Qwen3.8-27B-oQ4e-mtp' } });
+      await ui.waitFor('polish-style-model-hint', { count: 0 });
+      assert(settings().polish.style === 'auto', 'model update preserves style');
+    } finally {
+      settingsService.update({ asr: previous.asr, polish: previous.polish });
+    }
+  });
+
   await test('polished history shows the badge and original transcription', async () => {
     const id = historyService.begin({ engine: 'whisper.cpp' });
     assert(id, 'session begun');

@@ -13,6 +13,8 @@ export interface AppSettings {
     retentionDays: number | null;
   };
   asr: {
+    /** Model catalog id; null preserves automatic discovery. */
+    model: string | null;
     language: string | null;
     whisperServerUrl: string;
     /** Proper nouns and terms that recognition should favor */

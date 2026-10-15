@@ -3,10 +3,14 @@
  */
 
 import type { ChildProcess } from 'node:child_process';
+import type { WhisperModelDependencies } from './lib/models';
 
 export interface WhisperLaunchPlan {
   binary: string;
   model: string;
+  modelId: string | null;
+  modelFallback: boolean;
+  modelLocked: 'env' | null;
   vadModel: string | null;
   host: '127.0.0.1';
   port: number;
@@ -15,17 +19,15 @@ export interface WhisperLaunchPlan {
 
 export type WhisperDiscoveryResult =
   | { available: true; plan: WhisperLaunchPlan }
-  | { available: false; reason: string };
+  | { available: false; reason: string; modelFallback?: boolean };
 
 export type WhisperEndpoint =
   | { local: true; port: number; url: string; managedUrl: string }
   | { local: false; reason: string };
 
-export interface WhisperDiscoveryInputs {
+export interface WhisperDiscoveryInputs extends WhisperModelDependencies {
   env: Record<string, string | undefined>;
-  homedir: () => string;
   fileExists: (path: string) => boolean;
-  readDirectory: (path: string) => string[];
 }
 
 export interface WhisperPidRecord {
@@ -51,6 +53,9 @@ export interface WhisperServerStatus {
   model: string | null;
   vadModel: string | null;
   reason: string | null;
+  modelId: string | null;
+  modelFallback: boolean;
+  modelLocked: 'env' | 'external' | null;
 }
 
 export interface WhisperServerDependencies {
@@ -66,6 +71,7 @@ export interface WhisperServerDependencies {
   kill: (pid: number, signal: NodeJS.Signals) => void;
   pidFilePath: () => string;
   getServerUrl: () => string;
+  getModel: () => string | null;
   logger: {
     debug: (message: string, details?: unknown) => void;
     info: (message: string, details?: unknown) => void;

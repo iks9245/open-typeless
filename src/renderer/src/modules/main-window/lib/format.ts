@@ -50,7 +50,17 @@ export function serverModeLabel(mode: WhisperServerInfo['mode']): string {
 }
 
 export function serverStateLabel(state: WhisperServerInfo['state']): string {
-  return { idle: '尚未啟動', starting: '啟動中', ready: '就緒', stopped: '已停止', failed: '失敗' }[state];
+  return { idle: '尚未啟動', starting: '正在載入模型…', ready: '就緒', stopped: '已停止', failed: '失敗' }[state];
+}
+
+export function formatModelSize(sizeBytes: number): string {
+  return sizeBytes >= 1024 ** 3 ? `${(sizeBytes / 1024 ** 3).toFixed(1)} GB` : `${(sizeBytes / 1024 ** 2).toFixed(1)} MB`;
+}
+
+export function modelLockReason(lock: WhisperServerInfo['modelLocked']): string | undefined {
+  if (lock === 'env') return '已由 WHISPER_MODEL_PATH 指定';
+  if (lock === 'external') return '伺服器不是由 app 啟動，無法切換模型';
+  return undefined;
 }
 
 export function errorMessage(error: unknown): string {

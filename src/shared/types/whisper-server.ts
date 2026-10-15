@@ -12,4 +12,14 @@ export interface WhisperServerInfo {
   binaryName: string | null;
   modelName: string | null;
   vadModelName: string | null;
+  modelId: string | null;
+  modelFallback: boolean;
+  modelLocked: 'env' | 'external' | null;
+}
+
+export interface WhisperModelInfo {
+  id: string;
+  source: 'app' | 'whisper.cpp';
+  fileName: string;
+  sizeBytes: number;
 }

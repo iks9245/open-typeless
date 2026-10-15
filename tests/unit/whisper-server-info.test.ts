@@ -4,6 +4,7 @@ import { toWhisperServerInfo } from '../../src/main/ipc/whisper-server.handler';
 describe('toWhisperServerInfo', () => {
   it('exposes file names but never full paths or the process ID', () => {
     const info = toWhisperServerInfo({
+      modelId: 'whisper.cpp/ggml-large-v3-turbo.bin', modelFallback: false, modelLocked: null,
       mode: 'managed',
       state: 'ready',
       pid: 4242,
@@ -14,6 +15,7 @@ describe('toWhisperServerInfo', () => {
     });
 
     expect(info).toEqual({
+      modelId: 'whisper.cpp/ggml-large-v3-turbo.bin', modelFallback: false, modelLocked: null,
       mode: 'managed',
       state: 'ready',
       reason: null,
@@ -27,6 +29,7 @@ describe('toWhisperServerInfo', () => {
 
   it('keeps unknown files as null', () => {
     expect(toWhisperServerInfo({
+      modelId: null, modelFallback: true, modelLocked: null,
       mode: 'unavailable', state: 'failed', pid: null, binary: null, model: null, vadModel: null,
       reason: 'whisper-server binary not found',
     })).toMatchObject({ binaryName: null, modelName: null, vadModelName: null, reason: 'whisper-server binary not found' });

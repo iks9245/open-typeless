@@ -23,6 +23,13 @@ export function commandOf(pid: number): Promise<string> {
   });
 }
 
+/** ps may print paths with spaces either quoted or unquoted. Stop at the next flag. */
+export function modelFromCommand(command: string): string | null {
+  const argument = command.match(/(?:^|\s)-m\s+("(?:\\.|[^"])*"|'[^']*'|.+?)(?=\s+--?[a-zA-Z][\w-]*(?:\s|=|$)|\s*$)/)?.[1];
+  if (!argument) return null;
+  return argument.replace(/^(["'])(.*)\1$/, '$2').replace(/\\([\s"'\\])/g, '$1');
+}
+
 export async function removeWhisperPid(path: string, deps: WhisperOwnershipDependencies): Promise<void> {
   try {
     await deps.unlink(path);

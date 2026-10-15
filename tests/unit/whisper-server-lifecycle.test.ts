@@ -5,7 +5,7 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
@@ -33,6 +33,7 @@ describe('WhisperServerService lifecycle', () => {
   let dir: string;
   let port: number;
   let pidFile: string;
+  let selectedModel: string | null;
   const cleanups: (() => void)[] = [];
   const services: WhisperServerService[] = [];
 
@@ -47,6 +48,9 @@ describe('WhisperServerService lifecycle', () => {
       timers: { setTimeout, clearTimeout },
       now: Date.now,
       discovery: {
+        userData: () => dir,
+        statFile: file => statSync(file),
+        readHeader: file => readFileSync(file).subarray(0, 4),
         env: { WHISPER_SERVER_BIN: FIXTURE, WHISPER_MODEL_PATH: path.join(dir, 'model.bin'), ...env },
         // An empty home keeps the real ~/whisper.cpp out of discovery
         homedir: () => dir,
@@ -62,6 +66,7 @@ describe('WhisperServerService lifecycle', () => {
       },
       kill: (pid, signal) => { process.kill(pid, signal); },
       pidFilePath: () => pidFile,
+      getModel: () => selectedModel,
       getServerUrl: () => `http://127.0.0.1:${port}`,
       logger: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined },
     });
@@ -79,6 +84,7 @@ describe('WhisperServerService lifecycle', () => {
     dir = mkdtempSync(path.join(os.tmpdir(), 'whisper-lifecycle-'));
     writeFileSync(path.join(dir, 'model.bin'), 'model');
     pidFile = path.join(dir, 'whisper-server.pid');
+    selectedModel = null;
     port = await freePort();
     process.env.FAKE_DELAY_MS = '300';
     delete process.env.FAKE_EXIT_AFTER_MS;
@@ -112,6 +118,25 @@ describe('WhisperServerService lifecycle', () => {
     expect(service.status().state).toBe('stopped');
   });
 
+  it('restarts a managed server after the selected model changes', async () => {
+    mkdirSync(path.join(dir, 'models'));
+    const model = path.join(dir, 'models', 'cantonese.bin');
+    writeFileSync(model, Buffer.from('lmggpadding'));
+    const service = createService({ WHISPER_MODEL_PATH: undefined });
+    selectedModel = 'app/cantonese.bin';
+    await service.start();
+    const pid = service.status().pid as number;
+    selectedModel = 'app/next.bin';
+    writeFileSync(path.join(dir, 'models', 'next.bin'), Buffer.from('lmggpadding'));
+    const restarting = service.modelChanged();
+    expect(service.status().state).toBe('starting');
+    await restarting;
+    expect(alive(pid)).toBe(false);
+    expect(service.status()).toMatchObject({ mode: 'managed', state: 'ready', modelId: 'app/next.bin' });
+    const args = JSON.parse(readFileSync(path.join(dir, 'args.json'), 'utf8')) as string[];
+    expect(args[args.indexOf('-m') + 1]).toBe(path.join(dir, 'models', 'next.bin'));
+  });
+
   it('lets callers wait for a server that is still starting', async () => {
     process.env.FAKE_DELAY_MS = '1000';
     const service = createService();
@@ -132,6 +157,9 @@ describe('WhisperServerService lifecycle', () => {
     await service.start();
     expect(service.status()).toMatchObject({ mode: 'external', state: 'ready', pid: null });
 
+    selectedModel = 'app/other.bin';
+    await service.modelChanged();
+    expect(service.status()).toMatchObject({ mode: 'external', state: 'ready', modelLocked: 'external' });
     await service.stop();
     const response = await fetch(`http://127.0.0.1:${port}/`);
     expect(response.status).toBe(200);
@@ -191,6 +219,24 @@ describe('WhisperServerService lifecycle', () => {
     await service.stop();
     expect(alive(pid)).toBe(false);
     expect(existsSync(pidFile)).toBe(false);
+  });
+
+  it('replaces an owned orphan whose -m argument differs from the selected model', async () => {
+    const orphan = spawnOrphan();
+    const pid = orphan.pid as number;
+    writeFileSync(pidFile, JSON.stringify({ pid, binary: FIXTURE, port, startedAt: Date.now() }));
+    await wait(500);
+    mkdirSync(path.join(dir, 'models'));
+    const model = path.join(dir, 'models', 'cantonese.bin');
+    writeFileSync(model, Buffer.from('lmggpadding'));
+    selectedModel = 'app/cantonese.bin';
+    const service = createService({ WHISPER_MODEL_PATH: undefined });
+    await service.start();
+    expect(alive(pid)).toBe(false);
+    expect(service.status()).toMatchObject({ mode: 'managed', state: 'ready', model, modelId: selectedModel });
+    expect(service.status().pid).not.toBe(pid);
+    const args = JSON.parse(readFileSync(path.join(dir, 'args.json'), 'utf8')) as string[];
+    expect(args[args.indexOf('-m') + 1]).toBe(model);
   });
 
   it('never adopts or signals an unrelated process named in the pid file', async () => {

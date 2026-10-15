@@ -4,6 +4,7 @@
 
 import path from 'node:path';
 import type { WhisperDiscoveryInputs, WhisperDiscoveryResult, WhisperEndpoint } from '../types';
+import { isWhisperModel, modelIdForPath, modelPath } from './models';
 
 export function resolveWhisperEndpoint(serverUrl: string): WhisperEndpoint {
   try {
@@ -28,7 +29,7 @@ export function resolveWhisperEndpoint(serverUrl: string): WhisperEndpoint {
   }
 }
 
-export function discoverWhisperServer(serverUrl: string, deps: WhisperDiscoveryInputs): WhisperDiscoveryResult {
+export function discoverWhisperServer(serverUrl: string, deps: WhisperDiscoveryInputs, selectedModel: string | null = null): WhisperDiscoveryResult {
   const endpoint = resolveWhisperEndpoint(serverUrl);
   if (endpoint.local === false) return { available: false, reason: endpoint.reason };
 
@@ -44,11 +45,17 @@ export function discoverWhisperServer(serverUrl: string, deps: WhisperDiscoveryI
   ]);
   if (!binary) return { available: false, reason: 'whisper-server binary not found' };
 
-  const model = firstExisting([
-    deps.env.WHISPER_MODEL_PATH,
+  const envModel = firstExisting([deps.env.WHISPER_MODEL_PATH]);
+  const selectedPath = selectedModel === null ? null : modelPath(selectedModel, deps);
+  const selected = selectedPath !== null && isWhisperModel(selectedPath, deps) ? selectedPath : null;
+  const modelFallback = envModel === undefined && selectedModel !== null && selected === null;
+  const model = envModel ?? selected ?? firstExisting([
     ...['large-v3-turbo', 'large-v3', 'medium', 'small', 'base'].map(name => path.join(models, `ggml-${name}.bin`)),
   ]);
-  if (!model) return { available: false, reason: 'no ggml model found' };
+  if (!model) return {
+    available: false, reason: 'no ggml model found',
+    ...(modelFallback ? { modelFallback: true } : {}),
+  };
 
   const configuredVad = deps.env.WHISPER_VAD_MODEL_PATH;
   let vadModel = firstExisting([
@@ -64,5 +71,9 @@ export function discoverWhisperServer(serverUrl: string, deps: WhisperDiscoveryI
   }
   const args = ['-m', model, '-l', 'auto', '--host', '127.0.0.1', '--port', String(endpoint.port)];
   if (vadModel !== null) args.push('--vad', '--vad-model', vadModel);
-  return { available: true, plan: { binary, model, vadModel, host: '127.0.0.1', port: endpoint.port, args } };
+  return { available: true, plan: {
+    binary, model, modelId: modelIdForPath(model, deps), modelFallback,
+    modelLocked: deps.env.WHISPER_MODEL_PATH ? 'env' : null,
+    vadModel, host: '127.0.0.1', port: endpoint.port, args,
+  } };
 }

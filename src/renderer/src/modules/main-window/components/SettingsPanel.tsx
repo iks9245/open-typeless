@@ -9,7 +9,7 @@ import { usePolishStatus } from '../hooks/usePolishStatus';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useMounted } from '../hooks/useMounted';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
-import { polishStyleModelHint, polishModelOptions, polishReasonLabel, serverModeLabel, serverStateLabel } from '../lib/format';
+import { formatModelSize, modelLockReason, polishStyleModelHint, polishModelOptions, polishReasonLabel, serverModeLabel, serverStateLabel } from '../lib/format';
 
 function SettingRow({ title, detail, children }: { title: string; detail?: string; children: ReactNode }) {
   return <div className="setting-row"><div><span className="setting-title">{title}</span>{detail && <p className="muted help">{detail}</p>}</div>{children}</div>;
@@ -29,7 +29,17 @@ export function SettingsPanel({ active }: { active: boolean }) {
     finally { if (mounted.current) setReindexing(false); }
   };
   const mounted = useMounted();
-  const server = useServerStatus(active);
+  const server = useServerStatus(active, settings?.asr.model);
+  const [openingModels, setOpeningModels] = useState(false);
+  const openModelsFolder = async () => {
+    if (openingModels) return;
+    setOpeningModels(true);
+    try {
+      const result = await window.api.whisperServer.openModelsFolder();
+      if (mounted.current && result.success === false) report(result.error, true);
+    } catch { if (mounted.current) report('無法打開模型資料夾', true); }
+    finally { if (mounted.current) setOpeningModels(false); }
+  };
   const polish = usePolishStatus(active);
   const loginItem = useLoginItem(active);
   const [url, setUrl] = useState('');
@@ -67,6 +77,9 @@ export function SettingsPanel({ active }: { active: boolean }) {
   const disabled = !settings || saving;
   const cantonese = settings && effectivePolishStyle(settings) === 'cantonese';
   const styleModelHint = settings ? polishStyleModelHint(settings) : null;
+  const cantoneseModel = [settings?.asr.model, server.status?.modelName].some(name => name?.toLowerCase().includes('cantonese'));
+  const modelLocked = server.status?.modelLocked ?? null;
+  const selectedMissing = settings?.asr.model && !server.models.some(model => model.id === settings.asr.model);
   return (
     <div className="panel-content settings-panel">
       <div className="section-heading"><div><h1>設定</h1><p className="muted">依照你的習慣，調整聽寫體驗。</p></div></div>
@@ -83,6 +96,22 @@ export function SettingsPanel({ active }: { active: boolean }) {
               <p id="server-url-error" className="error-text help" aria-live="polite">{urlError}</p>
             </div>
           </div>
+          <SettingRow title="辨識模型" detail={modelLockReason(modelLocked)}>
+            <select aria-label="辨識模型" data-testid="settings-asr-model" value={settings?.asr.model ?? ''}
+              disabled={disabled || modelLocked !== null}
+              onChange={event => { void update({ asr: { model: event.target.value || null } }); }}>
+              <option value="">自動（目前：{server.status?.modelName ?? '未提供'}）</option>
+              {server.models.map(model => <option key={model.id} value={model.id}>{model.fileName}（{formatModelSize(model.sizeBytes)}） · {model.source}</option>)}
+              {selectedMissing && <option value={settings.asr.model ?? ''}>{settings.asr.model?.split('/')[1]}（找不到模型）</option>}
+            </select>
+          </SettingRow>
+          <SettingRow title="模型資料夾">
+            <button data-testid="settings-open-models-folder" disabled={openingModels} onClick={() => { void openModelsFolder(); }}>打開模型資料夾</button>
+          </SettingRow>
+          {server.modelsError && <p className="error-text help" role="alert">{server.modelsError}</p>}
+          {server.status?.modelFallback && <p className="muted help" role="status">找不到選擇的模型，暫時使用自動選擇</p>}
+          {cantoneseModel && settings?.asr.language === 'yue' && <p className="muted help" data-testid="asr-model-language-hint">粵語模型配合「自動偵測」語言，普通話和英文也能正確辨識。</p>}
+          {cantoneseModel && cantonese && <p className="muted help" data-testid="asr-model-polish-hint">粵語模型已直接輸出粵語口語，潤稿風格建議改為「一般」。</p>}
           <SettingRow title="辨識語言">
             <select aria-label="辨識語言" data-testid="settings-language" value={settings?.asr.language ?? ''} disabled={disabled}
               onChange={(event) => { void update({ asr: { language: event.target.value || null } }); }}>

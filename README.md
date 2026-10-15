@@ -68,6 +68,14 @@ cd ~/whisper.cpp
 
 不加 `-l auto` 時，伺服器預設以英文辨識，中文會辨識錯誤。
 
+### 辨識模型選擇
+
+在「設定 → 語音辨識 → 辨識模型」選擇模型；預設「自動」維持原有的優先順序（large-v3-turbo → large-v3 → medium → small → base）。清單會掃描 app 的 `<userData>/models`（macOS 通常為 `~/Library/Application Support/open-typeless/models`）和 `~/whisper.cpp/models`，只列出具有 ggml 標頭的 `.bin` 模型，不含測試或 Silero VAD 模型。按「打開模型資料夾」會建立並開啟 app 的模型資料夾，把下載好的模型放進去即可，清單會自動更新。
+
+切換模型時，由 app 管理或沿用的伺服器會重新啟動，狀態顯示「正在載入模型…」。找不到選擇的模型時會暫時回到自動選擇並顯示提示。`WHISPER_MODEL_PATH` 的優先權最高；若設了此環境變數，或連線的是外部伺服器，選單會停用並說明原因。
+
+粵語使用者建議選用 **large-v3-cantonese q8_0**，辨識語言設「自動偵測」，潤稿風格設「一般」。模型來自 [kiuckhuang/whisper-large-v3-cantonese-ggml](https://huggingface.co/kiuckhuang/whisper-large-v3-cantonese-ggml)，採 Apache-2.0 授權，由 `khleeloo/whisper-large-v3-cantonese` 轉換；可直接輸出粵語口語，自動偵測也能兼顧普通話與英文。2026-10-15 的 12 句 macOS Sinji 合成粵語測試中，相較 Turbo，字元錯誤率由 37.9% 降至 3.4%，口語標記保留率由 2% 升至 98%；自動偵測每句約 0.66 秒（指定 `yue` 約 0.40 秒，Turbo 約 0.25 秒）。一段 68 秒真人錄音約需 3.0–3.3 秒，Turbo 約 1.5 秒；這些是本機小樣本結果，實際速度與準確度會依錄音和硬體而異。
+
 ### 3. 安裝依賴套件
 
 ```bash
@@ -145,6 +153,7 @@ AI 潤稿預設關閉，可在「設定 → AI 潤稿」啟用。需要先在本
 | `history.saveAudio` | `false` | 是否保存錄音 |
 | `history.retentionDays` | 不限 | 保留天數，每次啟動時清理 |
 | `asr.whisperServerUrl` | `.env` 或 `http://localhost:8080` | whisper.cpp 伺服器位址 |
+| `asr.model` | `null`（自動） | 辨識模型 id，例如 `app/ggml-large-v3-cantonese-q8_0.bin` 或 `whisper.cpp/ggml-base.bin` |
 | `asr.language` | `.env` 或自動偵測 | 語言提示 |
 | `asr.vocabulary` | 空 | 自訂詞彙表（最多 50 個，每個最長 40 字），見下方「專有名詞辨識不準」 |
 | `polish.enabled` | `false` | 是否啟用本機 AI 潤稿 |
@@ -152,7 +161,7 @@ AI 潤稿預設關閉，可在「設定 → AI 潤稿」啟用。需要先在本
 | `polish.style` | `auto` | 潤稿風格：`auto`、`standard`、`cantonese` |
 | `input.autoInsert` | `true` | 是否自動插入文字 |
 
-目前還沒有設定介面；歷史與設定已透過 `window.api.history` 和 `window.api.settings` 提供給渲染程序，介面會在之後加入。
+可在主視窗查看歷史與調整設定；變更會儲存在本機資料庫。
 
 資料庫無法開啟時，app 仍可正常聽寫，只是不記錄歷史。
 

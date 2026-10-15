@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { findOwnedWhisperProcess } from '../../src/main/services/whisper-server/lib/ownership';
+import { findOwnedWhisperProcess, modelFromCommand } from '../../src/main/services/whisper-server/lib/ownership';
 import type { WhisperOwnershipDependencies } from '../../src/main/services/whisper-server/types';
 
 describe('whisper ownership', () => {
@@ -69,5 +69,19 @@ describe('whisper ownership', () => {
     expect(deps.unlink).toHaveBeenCalledTimes(1);
     expect(deps.unlink).toHaveBeenCalledWith(pidFile);
     expect(kill).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('modelFromCommand', () => {
+  it.each([
+    ['/bin/whisper-server -m /models/base.bin -l auto --port 8080', '/models/base.bin'],
+    ['/bin/whisper-server -m "/Application Support/models/base.bin" --port 8080', '/Application Support/models/base.bin'],
+    ["/bin/whisper-server -m '/Application Support/models/base.bin' --port 8080", '/Application Support/models/base.bin'],
+    ['/bin/whisper-server -m /Application Support/models/base.bin -l auto --port 8080', '/Application Support/models/base.bin'],
+    ['/bin/whisper-server --port 8080 -m /models/base.bin\n', '/models/base.bin'],
+    ['/bin/whisper-server --vad-model /models/vad.bin --port 8080', null],
+  ])('reads the actual model argument in %j', (command, expected) => {
+    expect(modelFromCommand(command)).toBe(expected);
   });
 });

@@ -57,7 +57,7 @@ run(async () => {
     const keys = await ui.exec<{ api: string[]; asr: string[] }>(`({
       api: Object.keys(window.api).sort(), asr: Object.keys(window.api.asr).sort()
     })`);
-    assert(JSON.stringify(keys.api) === JSON.stringify(['asr', 'history', 'polish', 'settings', 'whisperServer']),
+    assert(JSON.stringify(keys.api) === JSON.stringify(['asr', 'history', 'polish', 'settings', 'system', 'whisperServer']),
       'main API has no floatingWindow key', keys);
     assert(JSON.stringify(keys.asr) === JSON.stringify(['onError', 'onResult', 'onStatus', 'sendAudio']),
       'ASR API has no start or stop keys', keys);
@@ -213,6 +213,49 @@ run(async () => {
     await ui.screenshot('3-settings-light');
   });
 
+  await test('trigger choices save and update footer and command help labels', async () => {
+    const previous = settings().input.triggerKey;
+    const { TRIGGER_KEYS } = await import('../../src/shared/constants/keyboard');
+    try {
+      await ui.click('tab-settings');
+      const options = await ui.exec<{ id: string; label: string }[]>(`[...document.querySelector('[data-testid="settings-trigger-key"]').options].map(option => ({ id: option.value, label: option.textContent }))`);
+      assert(JSON.stringify(options) === JSON.stringify(TRIGGER_KEYS.map(({ id, label }) => ({ id, label }))), 'all trigger choices listed', options);
+      await ui.select('settings-trigger-key', 'right-command');
+      await until('trigger key to save', () => settings().input.triggerKey === 'right-command');
+      await ui.waitUntil('footer follows selected key', `document.querySelector('.app-footer').textContent.includes('右 Command')`);
+      await ui.waitUntil('command help follows selected key', `document.querySelector('[aria-labelledby="command-heading"]').textContent.includes('Shift + 右 Command')`);
+    } finally {
+      settingsService.update({ input: { triggerKey: previous } });
+      await ui.waitUntil('trigger selection restored', `document.querySelector('[data-testid="settings-trigger-key"]').value === ${JSON.stringify(previous)}`);
+    }
+  });
+
+  await test('login switch is disabled for an unpackaged app and explains why', async () => {
+    await ui.click('tab-settings');
+    await ui.waitUntil('unsupported login item note', `document.querySelector('[aria-labelledby="input-heading"]').textContent.includes('只有打包後的 app 支援。')`);
+    assert(await ui.exec<boolean>(`document.querySelector('[data-testid="settings-launch-at-login"]').disabled`), 'login switch disabled');
+    const result = await ui.exec<{ success: boolean; data: { supported: boolean } }>('window.api.system.getLoginItem()');
+    assert(result.success && !result.data.supported, 'OS API reports unsupported', result);
+    const invalid = await ui.exec<{ success: boolean }>(`window.api.system.setLoginItem('yes')`);
+    assert(!invalid.success, 'non-boolean rejected');
+  });
+
+  await test('hide-on-close keeps a separate test window alive until quitting', async () => {
+    const { hideOnClose } = await import('../../src/main/windows/main-window');
+    const window = new BrowserWindow({ show: false });
+    let quitting = false;
+    try {
+      hideOnClose(window, () => quitting);
+      window.close();
+      assert(!window.isDestroyed() && !window.isVisible(), 'closed window stays alive and hidden');
+      quitting = true;
+      window.close();
+      await until('quitting window to close', () => window.isDestroyed());
+    } finally {
+      if (!window.isDestroyed()) window.destroy();
+    }
+  });
+
   await test('the polish section shows the not-installed state and disables its switch', async () => {
     await ui.click('tab-settings');
     await ui.waitUntil('oMLX missing status', `document.querySelector('[data-testid="polish-status"]')?.textContent.includes('找不到 oMLX，請先安裝並啟動 oMLX。')`, 3000);
@@ -278,6 +321,13 @@ run(async () => {
     await ui.click('history-clear-confirm');
     await ui.waitFor('history-empty', { timeoutMs: 3000 });
     assert(rowCount() === 0, 'database cleared', rowCount());
+    const previous = settings().input.triggerKey;
+    try {
+      settingsService.update({ input: { triggerKey: 'f15' } });
+      await ui.waitUntil('empty state follows the trigger', `document.querySelector('[data-testid="history-empty"]').textContent.includes('按住F15 鍵開始聽寫')`);
+    } finally {
+      settingsService.update({ input: { triggerKey: previous } });
+    }
     await ui.screenshot('4-history-empty-light');
   });
 

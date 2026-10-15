@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WebFrameMain } from 'electron';
-import { getTrustedWindowRole, isTrustedSender, registerTrustedWindow } from '../../src/main/ipc/sender';
+import { getTrustedWebContents, getTrustedWindowRole, isTrustedSender, registerTrustedWindow } from '../../src/main/ipc/sender';
 import { mockIpcEvent, mockWebContents } from './security-mocks';
 
 const url = 'file:///app/index.html';
@@ -70,5 +70,27 @@ describe('trusted window senders', () => {
       events.emit(eventName, { preventDefault }, otherUrl);
     }
     expect(preventDefault).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('role routing', () => {
+  it('routes only to the current registered role and does not remove its replacement when an older window dies', () => {
+    const old = mockWebContents(url);
+    const current = mockWebContents(url);
+    const floating = mockWebContents('file:///app/floating.html');
+    registerTrustedWindow(old.webContents, 'main');
+    registerTrustedWindow(current.webContents, 'main');
+    registerTrustedWindow(floating.webContents, 'floating');
+    expect(getTrustedWebContents('main')).toBe(current.webContents);
+    old.events.emit('destroyed');
+    expect(getTrustedWebContents('main')).toBe(current.webContents);
+    current.mainFrame.url = 'file:///other.html';
+    expect(getTrustedWebContents('main')).toBeNull();
+    current.mainFrame.url = url;
+    current.events.emit('destroyed');
+    expect(getTrustedWebContents('main')).toBeNull();
+    expect(getTrustedWebContents('floating')).toBe(floating.webContents);
+    floating.events.emit('destroyed');
+    expect(getTrustedWebContents('floating')).toBeNull();
   });
 });

@@ -13,6 +13,13 @@ interface TrustedWindow {
 }
 
 const trustedWindows = new WeakMap<WebContents, TrustedWindow>();
+const roleContents = new Map<WindowRole, WebContents>();
+
+/** Recording commands go only to the registered renderer for this role. */
+export function getTrustedWebContents(role: WindowRole): WebContents | null {
+  const contents = roleContents.get(role);
+  return contents && getTrustedWindowRole(contents) === role ? contents : null;
+}
 
 export function registerTrustedWindow(webContents: WebContents, role: WindowRole): void {
   if (webContents.isDestroyed() || trustedWindows.has(webContents)) return;
@@ -23,6 +30,7 @@ export function registerTrustedWindow(webContents: WebContents, role: WindowRole
     url: currentUrl && currentUrl !== 'about:blank' ? currentUrl : null,
   };
   trustedWindows.set(webContents, registration);
+  roleContents.set(role, webContents);
 
   // did-start-navigation runs before preload/renderer IPC, including on loadFile.
   // Never update this URL on subsequent navigation or redirects.
@@ -38,7 +46,10 @@ export function registerTrustedWindow(webContents: WebContents, role: WindowRole
   };
   webContents.on('will-navigate', restrictNavigation);
   webContents.on('will-redirect', restrictNavigation);
-  webContents.once('destroyed', () => trustedWindows.delete(webContents));
+  webContents.once('destroyed', () => {
+    trustedWindows.delete(webContents);
+    if (roleContents.get(role) === webContents) roleContents.delete(role);
+  });
 }
 
 /** Only a registered window still showing its original page has a trusted role. */

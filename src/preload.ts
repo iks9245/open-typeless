@@ -9,6 +9,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from './shared/constants/channels';
 import { asrEvents } from './preload-asr';
+import type { LoginItemState } from './shared/types/system';
 import type { AppApi } from './types/global';
 import type { PolishInfo } from './shared/types/polish';
 import type { IpcResult } from './shared/types/common';
@@ -130,6 +131,10 @@ const polishApi = {
 
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('api', {
+  system: {
+    getLoginItem: (): Promise<IpcResult<LoginItemState>> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM.GET_LOGIN_ITEM),
+    setLoginItem: (enabled: boolean): Promise<IpcResult<LoginItemState>> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM.SET_LOGIN_ITEM, enabled),
+  },
   asr: asrApi,
   history: historyApi,
   settings: settingsApi,

@@ -16,7 +16,7 @@ interface StatusIndicatorProps {
  * Labels and CSS class names for each ASR status.
  */
 const STATUS_CONFIG: Record<ASRStatus, { label: string; className: string }> = {
-  idle: { label: 'Hold Right Option', className: 'status-indicator--idle' },
+  idle: { label: '準備就緒', className: 'status-indicator--idle' },
   connecting: { label: 'Listening...', className: 'status-indicator--connecting' },
   listening: { label: 'Listening...', className: 'status-indicator--listening' },
   processing: { label: 'Processing...', className: 'status-indicator--processing' },

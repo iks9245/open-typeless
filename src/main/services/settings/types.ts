@@ -6,6 +6,7 @@
 import log from 'electron-log';
 import { z } from 'zod';
 import type { AppSettings, AppSettingsPatch } from '../../../shared/types/settings';
+import { TRIGGER_KEYS, type TriggerKeyId } from '../../../shared/constants/keyboard';
 import { DEFAULT_COMMAND_MODEL } from '../../../shared/constants/command';
 import { DEFAULT_POLISH_MODEL } from '../../../shared/constants/polish';
 import { MAX_VOCABULARY_TERMS, MAX_VOCABULARY_TERM_LENGTH } from '../../../shared/lib/vocabulary-prompt';
@@ -41,7 +42,10 @@ const asrSchema = z.object({
     .max(MAX_VOCABULARY_TERMS),
 }).strict();
 
-const inputSchema = z.object({ autoInsert: z.boolean() }).strict();
+const inputSchema = z.object({
+  autoInsert: z.boolean(),
+  triggerKey: z.enum(TRIGGER_KEYS.map(key => key.id)),
+}).strict();
 const polishSchema = z.object({
   enabled: z.boolean(),
   model: z.string().trim().min(1).max(200),
@@ -73,6 +77,7 @@ export const settingSchemas = {
   'asr.whisperServerUrl': asrSchema.shape.whisperServerUrl,
   'asr.vocabulary': asrSchema.shape.vocabulary,
   'input.autoInsert': inputSchema.shape.autoInsert,
+  'input.triggerKey': inputSchema.shape.triggerKey,
   'command.enabled': polishSchema.shape.enabled,
   'command.model': polishSchema.shape.model,
   'polish.enabled': polishSchema.shape.enabled,
@@ -95,6 +100,7 @@ export function applySetting(target: AppSettings, key: SettingKey, value: unknow
     case 'asr.whisperServerUrl': target.asr.whisperServerUrl = value as string; break;
     case 'asr.vocabulary': target.asr.vocabulary = value as string[]; break;
     case 'input.autoInsert': target.input.autoInsert = value as boolean; break;
+    case 'input.triggerKey': target.input.triggerKey = value as TriggerKeyId; break;
     case 'command.enabled': target.command.enabled = value as boolean; break;
     case 'command.model': target.command.model = value as string; break;
     case 'polish.enabled': target.polish.enabled = value as boolean; break;
@@ -114,7 +120,7 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
       whisperServerUrl: url.success === true ? url.data : 'http://localhost:8080',
       vocabulary: [],
     },
-    input: { autoInsert: true },
+    input: { autoInsert: true, triggerKey: 'right-option' },
     polish: { enabled: false, model: DEFAULT_POLISH_MODEL },
     command: { enabled: true, model: DEFAULT_COMMAND_MODEL },
   };

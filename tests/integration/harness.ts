@@ -48,9 +48,16 @@ export function assert(condition: unknown, message: string, details?: unknown): 
 
 /** Start the scenario once Electron is ready and exit with the result. */
 export function run(scenario: () => Promise<void>): void {
+  // Electron quits when the last window closes unless someone listens for this; scenarios
+  // open and close windows and must keep running
+  app.on('window-all-closed', () => undefined);
   app.whenReady()
     .then(scenario)
-    .then(() => app.exit(failures === 0 ? 0 : 1))
+    .then(() => {
+      // scripts/run-integration-tests.mjs requires this line to count the file as passed
+      console.log('INTEGRATION SCENARIO COMPLETE');
+      app.exit(failures === 0 ? 0 : 1);
+    })
     .catch((error) => {
       console.error('Scenario crashed:', error);
       app.exit(2);

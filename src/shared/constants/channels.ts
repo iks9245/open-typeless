@@ -4,6 +4,10 @@
  */
 
 export const IPC_CHANNELS = {
+  SYSTEM: {
+    GET_LOGIN_ITEM: 'system:get-login-item',
+    SET_LOGIN_ITEM: 'system:set-login-item',
+  },
   ASR: {
     /** Send audio data (Renderer -> Main) */
     SEND_AUDIO: 'asr:send-audio',

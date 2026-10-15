@@ -3,17 +3,17 @@
  * Orchestrates keyboard hooks, ASR, and text insertion for voice input.
  *
  * Flow:
- * 1. User holds Right Option key
+ * 1. User holds the trigger key
  * 2. KeyboardService detects keydown -> triggers handleKeyDown
  * 3. ASR session starts, floating window shows
  * 4. Renderer starts recording, sends audio chunks
- * 5. User releases Right Option key
+ * 5. User releases the trigger key
  * 6. KeyboardService detects keyup -> triggers handleKeyUp
  * 7. ASR session stops, gets final result
  * 8. Text is inserted at cursor position
  * 9. Floating window hides
  *
- * A release shorter than KeyboardService's minimum cancels instead (handleCancel):
+ * A short press or another key during the hold cancels instead (handleCancel):
  * nothing is transcribed or inserted, and the session's history row is removed.
  */
 
@@ -31,6 +31,9 @@ import { polishService } from '../polish';
 import { settingsService } from '../settings';
 import { permissionsService } from '../permissions';
 import { floatingWindow } from '../../windows';
+import { getTrustedWebContents } from '../../ipc/sender';
+import { TRIGGER_KEYS } from '../../../shared/constants/keyboard';
+import type { AppSettings } from '../../../shared/types/settings';
 import { IPC_CHANNELS } from '../../../shared/constants/channels';
 
 const logger = log.scope('push-to-talk-service');
@@ -91,6 +94,11 @@ export class PushToTalkService {
     this.tryStartKeyboardHook();
   };
 
+  private readonly onSettingsChanged = (settings: AppSettings): void => {
+    const key = TRIGGER_KEYS.find(key => key.id === settings.input.triggerKey) ?? TRIGGER_KEYS[0];
+    keyboardService.setTriggerKey(key.keycode);
+  };
+
   constructor(config: Partial<PushToTalkConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -106,6 +114,10 @@ export class PushToTalkService {
     }
 
     logger.info('Initializing PushToTalkService');
+    const settings = settingsService.get();
+    keyboardService.setTriggerKey(TRIGGER_KEYS[0].keycode);
+    if (settings.success === true) this.onSettingsChanged(settings.data);
+    settingsService.on('changed', this.onSettingsChanged);
 
     // Log permission status for debugging
     permissionsService.logPermissionStatus();
@@ -154,6 +166,7 @@ export class PushToTalkService {
     // Unregister keyboard hooks
     this.stopWaitingForAccessibility();
     keyboardService.unregister();
+    settingsService.off('changed', this.onSettingsChanged);
 
     this.isInitialized = false;
     logger.info('PushToTalkService disposed');
@@ -223,7 +236,7 @@ export class PushToTalkService {
       type: 'warning',
       message: 'Accessibility permission required',
       detail:
-        `${app.getName()} needs Accessibility access to detect the push-to-talk key (Right Option) ` +
+        `${app.getName()} needs Accessibility access to detect the push-to-talk key ` +
         'and insert text.\n\n' +
         `Open System Settings > Privacy & Security > Accessibility and turn on ${app.getName()}. ` +
         'Push-to-talk starts automatically once access is granted; no restart is needed.',
@@ -475,7 +488,7 @@ export class PushToTalkService {
   }
 
   /**
-   * Handle a press released before the minimum duration.
+   * Handle a short press or a session interrupted by another key.
    * Ends the session without transcribing: whisper.cpp turns very short or silent clips
    * into phantom text such as "Thank you.", which must never be inserted.
    */
@@ -489,7 +502,7 @@ export class PushToTalkService {
       return;
     }
 
-    logger.info('Push-to-talk: CANCEL (press too short)', { durationMs });
+    logger.info('Push-to-talk: CANCEL', { durationMs });
     this.isActive = false;
     const historyId = this.historyId;
     this.historyId = null;
@@ -561,35 +574,14 @@ export class PushToTalkService {
    * Notify renderer process to start recording.
    */
   private notifyRendererStartRecording(): void {
-    const mainWindow = this.getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send(IPC_CHANNELS.ASR.STATUS, 'listening');
-    }
+    getTrustedWebContents('main')?.send(IPC_CHANNELS.ASR.STATUS, 'listening');
   }
 
-  /**
-   * Notify renderer process to stop recording.
-   *
-   * @param status - 'processing' when the audio will be transcribed, 'idle' when it is discarded
-   */
+  /** Notify the recording renderer to finish or discard its audio. */
   private notifyRendererStopRecording(status: 'processing' | 'idle' = 'processing'): void {
-    const mainWindow = this.getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send(IPC_CHANNELS.ASR.STATUS, status);
-    }
-  }
-
-  /**
-   * Get the main application window.
-   */
-  private getMainWindow(): BrowserWindow | null {
-    return BrowserWindow.getAllWindows().find(
-      (win) => !win.isDestroyed()
-    ) ?? null;
+    getTrustedWebContents('main')?.send(IPC_CHANNELS.ASR.STATUS, status);
   }
 }
 
-/**
- * Singleton instance of the push-to-talk service.
- */
+/** Singleton instance of the push-to-talk service. */
 export const pushToTalkService = new PushToTalkService();

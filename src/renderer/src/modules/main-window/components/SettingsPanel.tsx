@@ -1,3 +1,5 @@
+import { TRIGGER_KEYS, triggerKeyLabel } from '../../../../../shared/constants/keyboard';
+import { useLoginItem } from '../hooks/useLoginItem';
 import { DEFAULT_COMMAND_MODEL } from '../../../../../shared/constants/command';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSettings } from '../hooks/SettingsContext';
@@ -16,6 +18,7 @@ export function SettingsPanel({ active }: { active: boolean }) {
   const mounted = useMounted();
   const server = useServerStatus(active);
   const polish = usePolishStatus(active);
+  const loginItem = useLoginItem(active);
   const [url, setUrl] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
   const urlBusy = useRef(false);
@@ -119,8 +122,23 @@ export function SettingsPanel({ active }: { active: boolean }) {
             {polishModelOptions(polish.status?.models ?? [], settings?.command.model ?? '', DEFAULT_COMMAND_MODEL).map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
           </select>
         </SettingRow>
-      </div><p className="muted help">按住 Shift + 右 Option 說出指令。有選取文字時依指令改寫並取代；沒有選取時在游標處插入產生的文字。每次約需 2–10 秒。</p></section>
+      </div><p className="muted help">按住 Shift + {triggerKeyLabel(settings?.input.triggerKey)} 說出指令。有選取文字時依指令改寫並取代；沒有選取時在游標處插入產生的文字。每次約需 2–10 秒。</p></section>
       <section className="settings-section" aria-labelledby="input-heading"><h2 id="input-heading">輸入</h2><div className="card">
+        <SettingRow title="聽寫快捷鍵" detail="按住這個鍵聽寫；同時按住 Shift 為指令模式。按住期間按下其他按鍵會取消聽寫，避免和快捷鍵衝突。">
+          <select aria-label="聽寫快捷鍵" data-testid="settings-trigger-key" value={settings?.input.triggerKey ?? 'right-option'} disabled={disabled}
+            onChange={(event) => {
+              const key = TRIGGER_KEYS.find(key => key.id === event.target.value);
+              if (key) void update({ input: { triggerKey: key.id } });
+            }}>
+            {TRIGGER_KEYS.map(key => <option key={key.id} value={key.id}>{key.label}</option>)}
+          </select>
+        </SettingRow>
+        <SettingRow title="開機時自動啟動" detail={loginItem.state?.supported === false ? '只有打包後的 app 支援。' : undefined}>
+          <input type="checkbox" role="switch" className="switch" aria-label="開機時自動啟動" data-testid="settings-launch-at-login"
+            checked={loginItem.state?.enabled ?? false} disabled={!loginItem.state?.supported || loginItem.pending}
+            onChange={(event) => { void loginItem.setEnabled(event.target.checked); }} />
+        </SettingRow>
+        {loginItem.state?.requiresApproval && <p className="muted help" role="status">請到「系統設定 → 一般 → 登入項目」允許 Open Typeless。</p>}
         <SettingRow title="自動插入文字" detail="辨識完成後，將文字插入目前使用的應用程式。">
           <input type="checkbox" role="switch" className="switch" aria-label="自動插入文字" data-testid="settings-auto-insert"
             checked={settings?.input.autoInsert ?? false} disabled={disabled} onChange={(event) => { void update({ input: { autoInsert: event.target.checked } }); }} />

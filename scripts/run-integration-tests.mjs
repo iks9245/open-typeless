@@ -22,6 +22,8 @@ const outDir = path.join(root, 'node_modules', '.cache', 'integration');
 const electron = path.join(root, 'node_modules', '.bin', 'electron');
 const TIMEOUT_MS = 180000;
 const filter = process.argv[2];
+/** Printed by tests/integration/harness.ts run() after the whole scenario finished */
+const SCENARIO_COMPLETE = 'INTEGRATION SCENARIO COMPLETE';
 
 const files = readdirSync(testDir)
   .filter((name) => name.endsWith('.test.ts') && (!filter || name.includes(filter)))
@@ -98,14 +100,18 @@ for (const file of files) {
   const { code, signal, output } = await run(bundle, tmp);
   rmSync(tmp, { recursive: true, force: true });
 
-  // Show only the harness lines unless the run failed
+  // A scenario passes only if it ran to the end: an app that quit early (for example when
+  // its last window closed) also exits with code 0
   const lines = output.split('\n');
-  const report = code === 0 ? lines.filter((line) => line.startsWith('  ✓') || line.startsWith('  ✗')) : lines;
-  console.log(`${code === 0 ? 'PASS' : 'FAIL'} ${file} (${Date.now() - started} ms)`);
-  console.log(report.filter((line) => line.trim()).join('\n'));
-  if (code !== 0) {
+  const completed = lines.includes(SCENARIO_COMPLETE);
+  const passed = code === 0 && completed;
+  // Show only the harness lines unless the run failed
+  const report = passed ? lines.filter((line) => line.startsWith('  ✓') || line.startsWith('  ✗')) : lines;
+  console.log(`${passed ? 'PASS' : 'FAIL'} ${file} (${Date.now() - started} ms)`);
+  console.log(report.filter((line) => line.trim() && line !== SCENARIO_COMPLETE).join('\n'));
+  if (!passed) {
     failed++;
-    console.log(`  exit code ${code}${signal ? `, signal ${signal}` : ''}`);
+    console.log(`  exit code ${code}${signal ? `, signal ${signal}` : ''}${completed ? '' : ', scenario did not run to the end'}`);
   }
 }
 

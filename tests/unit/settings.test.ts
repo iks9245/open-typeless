@@ -23,7 +23,7 @@ describe('settings', () => {
     expect(defaults).toEqual({
       history: { enabled: true, saveAudio: false, retentionDays: null },
       asr: { language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
-      input: { autoInsert: true },
+      input: { autoInsert: true, triggerKey: 'right-option' },
       polish: { enabled: false, model: 'Qwen3.5-9B-4bit' },
       command: { enabled: true, model: 'Qwen3.8-27B-oQ4e-mtp' },
     });
@@ -45,15 +45,24 @@ describe('settings', () => {
     const patch = {
       history: { enabled: false, saveAudio: true, retentionDays: 30 },
       asr: { language: null, whisperServerUrl: 'https://example.com/whisper', vocabulary: [] },
-      input: { autoInsert: false },
+      input: { autoInsert: false, triggerKey: 'right-command' },
       polish: { enabled: true, model: 'custom-model' },
       command: { enabled: false, model: 'custom-command' },
     };
     expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: patch });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: patch });
-    expect(connection.db.select().from(settings).all()).toHaveLength(11);
+    expect(connection.db.select().from(settings).all()).toHaveLength(12);
     expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.language'))
       .toEqual({ value: 'null', updated_at: now() });
+  });
+
+  it.each(['right-option', 'right-command', 'right-control', 'left-option', 'f13', 'f14', 'f15'])('persists trigger key %s while preserving autoInsert', triggerKey => {
+    expect(updateSettings(connection.db, { input: { triggerKey } }, now, env)).toEqual({
+      success: true, data: { ...getDefaultSettings(env), input: { autoInsert: true, triggerKey } },
+    });
+    expect(getSettings(connection.db, env)).toEqual({
+      success: true, data: { ...getDefaultSettings(env), input: { autoInsert: true, triggerKey } },
+    });
   });
 
   it('defaults polish off and trims model overrides while preserving other settings', () => {
@@ -109,6 +118,7 @@ describe('settings', () => {
     { history: { retentionDays: 0 } },
     { history: { retentionDays: 1.5 } },
     { input: { autoInsert: 'yes' } },
+    ...['shift', 'caps-lock', '', 91, null].map(triggerKey => ({ input: { triggerKey } })),
     { history: { saveAudio: true, enabled: 'yes' } },
     { input: { autoInsert: false }, asr: { whisperServerUrl: 'invalid' } },
   ])('rejects invalid patch %j atomically without storing any field', (patch) => {
@@ -117,9 +127,9 @@ describe('settings', () => {
   });
 
   it('preserves existing overrides and timestamps when a later patch is invalid', () => {
-    updateSettings(connection.db, { input: { autoInsert: false } }, now, env);
+    updateSettings(connection.db, { input: { autoInsert: false, triggerKey: 'right-option' } }, now, env);
     const before = connection.db.select().from(settings).all();
-    expect(updateSettings(connection.db, { input: { autoInsert: true }, history: { enabled: 0 } }, () => now() + 1, env).success).toBe(false);
+    expect(updateSettings(connection.db, { input: { autoInsert: true, triggerKey: 'right-option' }, history: { enabled: 0 } }, () => now() + 1, env).success).toBe(false);
     expect(connection.db.select().from(settings).all()).toEqual(before);
   });
 
@@ -133,7 +143,7 @@ describe('settings', () => {
     insert.run('input.autoInsert', 'false', now());
     expect(getSettings(connection.db, env)).toEqual({
       success: true,
-      data: { ...getDefaultSettings(env), history: { ...getDefaultSettings(env).history, saveAudio: true }, input: { autoInsert: false } },
+      data: { ...getDefaultSettings(env), history: { ...getDefaultSettings(env).history, saveAudio: true }, input: { autoInsert: false, triggerKey: 'right-option' } },
     });
   });
 });
@@ -177,7 +187,7 @@ describe('settings asr.vocabulary', () => {
     { name: 'more terms than the count limit', vocabulary: Array.from({ length: MAX_VOCABULARY_TERMS + 1 }, (_, index) => `term-${index}`) },
     { name: 'a non-array value', vocabulary: 'Jeris' },
   ])('rejects $name without writing any field', ({ vocabulary }) => {
-    expect(updateSettings(connection.db, { asr: { vocabulary }, input: { autoInsert: false } }, now, env).success)
+    expect(updateSettings(connection.db, { asr: { vocabulary }, input: { autoInsert: false, triggerKey: 'right-option' } }, now, env).success)
       .toBe(false);
     expect(connection.db.select().from(settings).all()).toEqual([]);
   });

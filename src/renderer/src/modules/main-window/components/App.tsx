@@ -1,3 +1,4 @@
+import { triggerKeyLabel } from '../../../../../shared/constants/keyboard';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { SettingsProvider, useSettings } from '../hooks/SettingsContext';
 import { HistoryPanel } from './HistoryPanel';
@@ -14,7 +15,7 @@ type Tab = typeof TABS[number]['id'];
 function AppContent() {
   const [tab, setTab] = useState<Tab>('history');
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const { loadError, reload, saveStatus } = useSettings();
+  const { settings, loadError, reload, saveStatus } = useSettings();
 
   const navigateTabs = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let next = index;
@@ -43,7 +44,7 @@ function AppContent() {
       <section role="tabpanel" id="panel-vocabulary" aria-labelledby="tab-vocabulary" hidden={tab !== 'vocabulary'} tabIndex={0}><VocabularyPanel /></section>
       <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden={tab !== 'settings'} tabIndex={0}><SettingsPanel active={tab === 'settings'} /></section>
     </main>
-    <footer className="app-footer"><span className="muted">按住右 Option 鍵開始聽寫</span>
+    <footer className="app-footer"><span className="muted">按住{triggerKeyLabel(settings?.input.triggerKey)} 鍵開始聽寫</span>
       <span data-testid="save-status" role="status" aria-live="polite" aria-atomic="true" className={saveStatus.error ? 'error-text' : 'save-status'}>{saveStatus.message}</span>
     </footer>
   </div>;

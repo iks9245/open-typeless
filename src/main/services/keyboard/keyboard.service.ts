@@ -19,6 +19,8 @@ interface KeyEventFlags {
   keycode: number;
   shiftKey: boolean;
   altKey: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
 }
 
 /**
@@ -78,6 +80,9 @@ export class KeyboardService {
   private onKeyUp: (() => void) | null = null;
   private onCancel: ((durationMs: number) => void) | null = null;
   private isStarted = false;
+  // Physical hold outlives a cancelled session, so repeats and deferred changes wait for release.
+  private triggerHeld = false;
+  private pendingTriggerKey: number | null = null;
   private readonly heldModifiers = new Set<number>();
 
   // Bound handlers for proper cleanup
@@ -104,7 +109,7 @@ export class KeyboardService {
    *
    * @param onKeyDown - Called when trigger key is pressed
    * @param onKeyUp - Called when trigger key is released after at least minRecordingMs
-   * @param onCancel - Called instead of onKeyUp when the press was shorter than minRecordingMs
+   * @param onCancel - Called instead of onKeyUp for a short press or another key interrupting the hold
    * @returns true if the hook is running
    */
   register(
@@ -155,7 +160,7 @@ export class KeyboardService {
     this.boundKeyUpHandler = keyUpHandler;
     this.isStarted = true;
 
-    logger.info('KeyboardService registered: Hold Right Option to trigger');
+    logger.info('KeyboardService registered', { triggerKey: this.config.triggerKey });
     return true;
   }
 
@@ -204,7 +209,17 @@ export class KeyboardService {
     return this.state.isKeyHeld;
   }
 
-  /** Wait until both physical Shift and Option keys are up, with a bounded wait. */
+  /** Defer a key change until the current physical trigger is released. */
+  setTriggerKey(keycode: number): void {
+    if (this.triggerHeld) {
+      this.pendingTriggerKey = keycode;
+    } else {
+      this.config.triggerKey = keycode;
+      this.state.lastKeyDownTime = 0;
+    }
+  }
+
+  /** Wait until all physical Shift, Ctrl, Alt and Meta keys are up, with a bounded wait. */
   async waitForModifiersReleased(timeoutMs: number): Promise<boolean> {
     const started = Date.now();
     while (this.heldModifiers.size) {
@@ -222,18 +237,27 @@ export class KeyboardService {
    */
   private syncModifiers(e: KeyEventFlags): void {
     if (this.isModifier(e.keycode)) return;
-    if (!e.shiftKey) {
+    if (e.shiftKey === false) {
       this.heldModifiers.delete(UiohookKey.Shift);
       this.heldModifiers.delete(UiohookKey.ShiftRight);
     }
-    if (!e.altKey) {
+    if (e.altKey === false) {
       this.heldModifiers.delete(UiohookKey.Alt);
       this.heldModifiers.delete(UiohookKey.AltRight);
+    }
+    if (e.ctrlKey === false) {
+      this.heldModifiers.delete(UiohookKey.Ctrl);
+      this.heldModifiers.delete(UiohookKey.CtrlRight);
+    }
+    if (e.metaKey === false) {
+      this.heldModifiers.delete(UiohookKey.Meta);
+      this.heldModifiers.delete(UiohookKey.MetaRight);
     }
   }
 
   private isModifier(keycode: number): boolean {
-    return new Set<number>([UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Alt, UiohookKey.AltRight]).has(keycode);
+    return new Set<number>([UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Alt, UiohookKey.AltRight,
+      UiohookKey.Ctrl, UiohookKey.CtrlRight, UiohookKey.Meta, UiohookKey.MetaRight]).has(keycode);
   }
 
   /**
@@ -241,6 +265,9 @@ export class KeyboardService {
    */
   private resetState(): void {
     this.heldModifiers.clear();
+    this.triggerHeld = false;
+    if (this.pendingTriggerKey !== null) this.config.triggerKey = this.pendingTriggerKey;
+    this.pendingTriggerKey = null;
     this.state = {
       isKeyHeld: false,
       lastKeyDownTime: 0,
@@ -260,10 +287,12 @@ export class KeyboardService {
    */
   private handleKeyDown(keycode: number, modifiers?: { shift?: boolean }): void {
     if (this.isModifier(keycode)) this.heldModifiers.add(keycode);
-    // Ignore if not our trigger key
-    if (keycode !== this.config.triggerKey) {
-      return;
+    if (this.state.isKeyHeld && keycode !== this.config.triggerKey &&
+      keycode !== UiohookKey.Shift && keycode !== UiohookKey.ShiftRight) {
+      this.state.isKeyHeld = false;
+      this.onCancel?.(Date.now() - this.state.recordingStartTime);
     }
+    if (keycode !== this.config.triggerKey || this.triggerHeld) return;
 
     // Ignore if debounced (auto-repeat prevention)
     if (this.isDebounced(this.state.lastKeyDownTime)) {
@@ -276,6 +305,7 @@ export class KeyboardService {
     }
 
     // Update state
+    this.triggerHeld = true;
     this.state.isKeyHeld = true;
     this.state.lastKeyDownTime = Date.now();
     this.state.recordingStartTime = Date.now();
@@ -295,6 +325,13 @@ export class KeyboardService {
     // Ignore if not our trigger key
     if (keycode !== this.config.triggerKey) {
       return;
+    }
+
+    this.triggerHeld = false;
+    if (this.pendingTriggerKey !== null) {
+      this.config.triggerKey = this.pendingTriggerKey;
+      this.pendingTriggerKey = null;
+      this.state.lastKeyDownTime = 0;
     }
 
     // Ignore if not currently held. No debounce here: a release of a held key is never

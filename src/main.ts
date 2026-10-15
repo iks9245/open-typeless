@@ -1,10 +1,11 @@
 import 'dotenv/config';
-import { app, BrowserWindow, session } from 'electron';
-import path from 'node:path';
+import { app, session } from 'electron';
+import type { BrowserWindow } from 'electron';
 import started from 'electron-squirrel-startup';
 import log from 'electron-log';
 import { setupAllIpcHandlers } from './main/ipc';
-import { registerTrustedWindow } from './main/ipc/sender';
+import { createWindow } from './main/windows/main-window';
+import { loginItemService } from './main/services/login-item';
 import { installPermissionHandlers } from './main/security/permissions';
 import { floatingWindow } from './main/windows';
 import { pushToTalkService } from './main/services';
@@ -29,44 +30,8 @@ app.on('web-contents-created', (_event, contents) => {
 // Setup IPC handlers before app is ready
 setupAllIpcHandlers();
 
-const createWindow = () => {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 960,
-    height: 680,
-    minWidth: 720,
-    minHeight: 520,
-    title: 'Open Typeless',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  registerTrustedWindow(mainWindow.webContents, 'main');
-
-  // and load the index.html of the app.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
-  }
-
-  // Open DevTools in development only
-  if (!app.isPackaged && process.env.OPEN_DEVTOOLS !== '0') {
-    mainWindow.webContents.openDevTools();
-  }
-
-  // Create the floating window (hidden initially)
-  floatingWindow.create();
-
-  // Initialize push-to-talk service after windows are created
-  pushToTalkService.initialize();
-};
+let isQuitting = false;
+let mainWindow: BrowserWindow | null = null;
 
 /**
  * Open local storage and maintain history once per launch.
@@ -102,7 +67,9 @@ app.on('ready', () => {
   // settings, so storage comes first. Never rejects; failures are logged.
   void whisperServerService.start();
   polishService.startWarmups();
-  createWindow();
+  mainWindow = createWindow(() => isQuitting, !loginItemService.wasOpenedAtLogin());
+  floatingWindow.create();
+  pushToTalkService.initialize();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -126,7 +93,10 @@ function cleanup(): void {
 }
 
 // Clean up before quitting
-app.on('before-quit', cleanup);
+app.on('before-quit', () => {
+  isQuitting = true;
+  cleanup();
+});
 
 // Handle SIGINT (Ctrl+C) and SIGTERM for graceful shutdown
 process.on('SIGINT', () => {
@@ -140,10 +110,10 @@ process.on('SIGTERM', () => {
 });
 
 app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    mainWindow = createWindow(() => isQuitting);
+  } else {
+    mainWindow.show();
   }
 });
 

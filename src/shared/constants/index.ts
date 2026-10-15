@@ -17,3 +17,5 @@ export type {
   InsertStatus,
   ASREngine,
 } from './history';
+
+export { TRIGGER_KEYS, triggerKeyLabel, type TriggerKeyId } from './keyboard';

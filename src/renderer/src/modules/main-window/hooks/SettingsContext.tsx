@@ -77,6 +77,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSaving(true);
     report('儲存中…');
     setSettings({
+      ...previous,
       asr: { ...previous.asr, ...patch.asr },
       history: { ...previous.history, ...patch.history },
       input: { ...previous.input, ...patch.input },

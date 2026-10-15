@@ -3,6 +3,8 @@
  * Runtime validation belongs to the main-process settings service.
  */
 
+import type { TriggerKeyId } from '../constants/keyboard';
+
 export interface AppSettings {
   history: {
     enabled: boolean;
@@ -25,6 +27,7 @@ export interface AppSettings {
   };
   input: {
     autoInsert: boolean;
+    triggerKey: TriggerKeyId;
   };
 }
 

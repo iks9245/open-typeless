@@ -3,6 +3,7 @@
  * Extends the Window interface with the exposed API.
  */
 
+import type { LoginItemState } from '../shared/types/system';
 import type { InputMode } from '../shared/constants/command';
 import type { ASRResult, ASRStatus } from '../shared/types/asr';
 import type { IpcResult } from '../shared/types/common';
@@ -127,6 +128,10 @@ interface WhisperServerApi {
  * Application API exposed to the renderer process.
  */
 export interface AppApi {
+  system: {
+    getLoginItem: () => Promise<IpcResult<LoginItemState>>;
+    setLoginItem: (enabled: boolean) => Promise<IpcResult<LoginItemState>>;
+  };
   asr: ASRApi;
   history: HistoryApi;
   settings: SettingsApi;

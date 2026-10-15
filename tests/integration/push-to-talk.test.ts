@@ -5,6 +5,7 @@
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { BrowserWindow } from 'electron';
 import { count, eq, inArray } from 'drizzle-orm';
 import { TMP_DIR, assert, run, silenceChunk, startFakeOmlx, startFakeWhisper, writeOmlxSettings, test, toneChunk, unusedUrl, until, wait } from './harness';
 
@@ -72,6 +73,113 @@ run(async () => {
   };
 
   configure({ asr: { whisperServerUrl: whisper.url } });
+
+  const withKeyboardCallbacks = async (action: () => Promise<void>): Promise<void> => {
+    const callbacks = { down: keyboard.onKeyDown, up: keyboard.onKeyUp, cancel: keyboard.onCancel };
+    keyboard.onKeyDown = mode => void ptt.handleKeyDown(mode);
+    keyboard.onKeyUp = () => void ptt.handleKeyUp();
+    keyboard.onCancel = ms => void (pushToTalkService as unknown as { handleCancel(ms: number): Promise<void> }).handleCancel(ms);
+    try {
+      await action();
+    } finally {
+      keyboard.handleKeyUp(keyboard.config.triggerKey);
+      keyboard.onKeyDown = callbacks.down;
+      keyboard.onKeyUp = callbacks.up;
+      keyboard.onCancel = callbacks.cancel;
+    }
+  };
+
+  await test('initialize applies the saved trigger and settings changes update the live keyboard', async () => {
+    const { permissionsService } = await import('../../src/main/services/permissions');
+    const original = settingsService.get();
+    assert(original.success, 'settings readable');
+    const register = keyboardService.register;
+    const accessibility = permissionsService.getAccessibilityStatus;
+    const microphone = permissionsService.requestMicrophonePermission;
+    try {
+      // Exercise initialize without starting a native hook or prompting for microphone access.
+      keyboardService.register = () => true;
+      permissionsService.getAccessibilityStatus = () => true;
+      permissionsService.requestMicrophonePermission = async () => true;
+      configure({ input: { triggerKey: 'right-command' } });
+      pushToTalkService.initialize();
+      assert(keyboard.config.triggerKey === 3676, 'saved trigger applied at startup', keyboard.config);
+      configure({ input: { triggerKey: 'f13' } });
+      assert(Number(keyboard.config.triggerKey) === 91, 'settings change applied live', keyboard.config);
+      await withKeyboardCallbacks(async () => {
+        const before = inserted.length;
+        keyboard.handleKeyDown(3640);
+        assert(!ptt.isActive, 'previous trigger ignored');
+        keyboard.handleKeyUp(3640);
+        keyboard.handleKeyDown(91);
+        await until('new trigger to listen', () => asrService.currentStatus === 'listening');
+        asrService.processAudioChunk(toneChunk());
+        await wait(250);
+        keyboard.handleKeyUp(91);
+        await until('new trigger session to complete', () => inserted.length === before + 1 && !ptt.isActive && activeRows() === 0);
+        assert(inserted.at(-1) === '你好世界', 'new trigger inserted transcript');
+      });
+      pushToTalkService.dispose();
+      configure({ input: { triggerKey: 'f14' } });
+      assert(Number(keyboard.config.triggerKey) === 91, 'dispose unsubscribed settings listener');
+    } finally {
+      pushToTalkService.dispose();
+      keyboardService.register = register;
+      permissionsService.getAccessibilityStatus = accessibility;
+      permissionsService.requestMicrophonePermission = microphone;
+      configure(original.data);
+      const { TRIGGER_KEYS } = await import('../../src/shared/constants/keyboard');
+      keyboardService.setTriggerKey((TRIGGER_KEYS.find(key => key.id === original.data.input.triggerKey) ?? TRIGGER_KEYS[0]).keycode);
+    }
+  });
+
+  await test('another key cancels a held trigger without transcription, insertion or history', async () => {
+    await withKeyboardCallbacks(async () => {
+      const before = { inferences: whisper.inferences, inserted: inserted.length, rows: rowCount() };
+      keyboard.handleKeyDown(keyboard.config.triggerKey);
+      await until('interrupted session to listen', () => asrService.currentStatus === 'listening');
+      asrService.processAudioChunk(toneChunk());
+      await wait(250);
+      keyboard.handleKeyDown(30);
+      keyboard.handleKeyDown(keyboard.config.triggerKey);
+      keyboard.handleKeyUp(30);
+      keyboard.handleKeyUp(keyboard.config.triggerKey);
+      await until('cancelled row to be removed', () => !ptt.isActive && rowCount() === before.rows);
+      assert(whisper.inferences === before.inferences, 'no transcription');
+      assert(inserted.length === before.inserted, 'no insertion');
+      assert(rowCount() === before.rows, 'no history row');
+    });
+  });
+
+  await test('recording notifications target the main role even with an earlier extra window', async () => {
+    const { registerTrustedWindow } = await import('../../src/main/ipc/sender');
+    const extra = new BrowserWindow({ show: false });
+    let main: BrowserWindow | null = null;
+    try {
+      main = new BrowserWindow({ show: false });
+      registerTrustedWindow(main.webContents, 'main');
+      await main.loadURL('data:text/html,<body>recording role test</body>');
+      const received: unknown[][] = [];
+      const extraReceived: unknown[][] = [];
+      const contents = main.webContents;
+      const send = contents.send;
+      const extraSend = extra.webContents.send;
+      contents.send = (channel, ...args) => { received.push([channel, ...args]); };
+      extra.webContents.send = (channel, ...args) => { extraReceived.push([channel, ...args]); };
+      try {
+        await session();
+        assert(received.some(args => args[0] === 'asr:status' && args[1] === 'listening'), 'main role receives recording start', received);
+        assert(received.some(args => args[0] === 'asr:status' && args[1] === 'processing'), 'main role receives recording stop', received);
+        assert(!extraReceived.some(args => args[0] === 'asr:status' && args[1] === 'listening'), 'extra window does not receive recording start', extraReceived);
+      } finally {
+        contents.send = send;
+        extra.webContents.send = extraSend;
+      }
+    } finally {
+      main?.destroy();
+      extra.destroy();
+    }
+  });
 
   await test('a dictation is transcribed, inserted and recorded as completed', async () => {
     await session();

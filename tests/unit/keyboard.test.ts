@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('uiohook-napi', () => ({
-  UiohookKey: { Shift: 42, ShiftRight: 54, Alt: 56, AltRight: 3640 },
+  UiohookKey: { Shift: 42, ShiftRight: 54, Alt: 56, AltRight: 3640, Ctrl: 29, CtrlRight: 3613, Meta: 3675, MetaRight: 3676, F13: 91, F14: 92, F15: 93 },
   uIOhook: { on: vi.fn(), off: vi.fn(), start: vi.fn(), stop: vi.fn() },
 }));
 vi.mock('../../src/main/services/permissions', () => ({ permissionsService: { getAccessibilityStatus: () => true } }));
@@ -10,6 +10,7 @@ import { uIOhook, UiohookKey } from 'uiohook-napi';
 import type { InputMode } from '../../src/shared/constants/command';
 
 interface Internals {
+  config: { triggerKey: number };
   handleKeyDown(keycode: number, modifiers?: { shift?: boolean }): void;
   handleKeyUp(keycode: number): void;
 }
@@ -117,6 +118,120 @@ describe('keyboard modes and modifiers', () => {
     expect(await service.waitForModifiersReleased(0)).toBe(false);
     handler('keydown')({ keycode: 30, shiftKey: false, altKey: false });
     expect(await service.waitForModifiersReleased(0)).toBe(true);
+    service.unregister();
+  });
+});
+
+describe('configurable triggers and interruptions', () => {
+  it.each([UiohookKey.MetaRight, UiohookKey.CtrlRight, UiohookKey.Alt, UiohookKey.F13, UiohookKey.F14, UiohookKey.F15])('changes the live key to %s', async keycode => {
+    vi.useFakeTimers();
+    const { service, keyboard, down, up } = fixture();
+    service.setTriggerKey(keycode);
+    expect(keyboard.config.triggerKey).toBe(keycode);
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    expect(down).not.toHaveBeenCalled();
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    keyboard.handleKeyDown(keycode);
+    await vi.advanceTimersByTimeAsync(250);
+    keyboard.handleKeyUp(keycode);
+    expect(down).toHaveBeenCalledOnce();
+    expect(down).toHaveBeenCalledWith('dictation');
+    expect(up).toHaveBeenCalledOnce();
+    service.unregister();
+  });
+
+  it('defers changes while held, applies only the last change, and ends the old session', async () => {
+    vi.useFakeTimers();
+    const { service, keyboard, down, up } = fixture();
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    service.setTriggerKey(UiohookKey.F13);
+    service.setTriggerKey(UiohookKey.F14);
+    expect(keyboard.config.triggerKey).toBe(UiohookKey.AltRight);
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    await vi.advanceTimersByTimeAsync(300);
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    expect(up).toHaveBeenCalledOnce();
+    expect(keyboard.config.triggerKey).toBe(UiohookKey.F14);
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    expect(down).toHaveBeenCalledOnce();
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    keyboard.handleKeyDown(UiohookKey.F14, { shift: true });
+    expect(down).toHaveBeenLastCalledWith('command');
+    service.unregister();
+  });
+
+  it.each([30, UiohookKey.Ctrl, UiohookKey.MetaRight, UiohookKey.Alt])('cancels on key %s, ignores repeats and later release, and recovers on the next press', async keycode => {
+    vi.useFakeTimers();
+    const { service, keyboard, down, up, cancel } = fixture();
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    await vi.advanceTimersByTimeAsync(300);
+    keyboard.handleKeyDown(keycode);
+    keyboard.handleKeyDown(keycode);
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledWith(300);
+    expect(down).toHaveBeenCalledOnce();
+    keyboard.handleKeyUp(keycode);
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    expect(up).not.toHaveBeenCalled();
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    await vi.advanceTimersByTimeAsync(300);
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    expect(down).toHaveBeenCalledTimes(2);
+    expect(up).toHaveBeenCalledOnce();
+    service.unregister();
+  });
+
+  it('keeps a pending change deferred after interruption until the physical release', () => {
+    const { service, keyboard, cancel, up } = fixture();
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    keyboard.handleKeyDown(30);
+    service.setTriggerKey(UiohookKey.F13);
+    expect(keyboard.config.triggerKey).toBe(UiohookKey.AltRight);
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    expect(keyboard.config.triggerKey).toBe(UiohookKey.F13);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(up).not.toHaveBeenCalled();
+    service.unregister();
+  });
+
+  it.each([UiohookKey.Shift, UiohookKey.ShiftRight])('Shift %s and trigger repeats never interrupt', async shift => {
+    vi.useFakeTimers();
+    const { service, keyboard, cancel, up, down } = fixture();
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    keyboard.handleKeyDown(shift);
+    keyboard.handleKeyDown(UiohookKey.AltRight);
+    await vi.advanceTimersByTimeAsync(300);
+    keyboard.handleKeyUp(UiohookKey.AltRight);
+    keyboard.handleKeyUp(shift);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(up).toHaveBeenCalledOnce();
+    expect(down).toHaveBeenCalledOnce();
+    expect(down).toHaveBeenCalledWith('dictation');
+    service.unregister();
+  });
+
+  it('waits for both Ctrl and Meta sides and resyncs only groups reported as released', async () => {
+    const { keyboard, service } = fixture();
+    const codes = [UiohookKey.Ctrl, UiohookKey.CtrlRight, UiohookKey.Meta, UiohookKey.MetaRight];
+    for (const code of codes) keyboard.handleKeyDown(code);
+    expect(await service.waitForModifiersReleased(0)).toBe(false);
+    keyboard.handleKeyUp(UiohookKey.Ctrl);
+    keyboard.handleKeyUp(UiohookKey.Meta);
+    expect(await service.waitForModifiersReleased(0)).toBe(false);
+    const calls = vi.mocked(uIOhook.on).mock.calls as unknown as [string, unknown][];
+    const handler = calls.find(([event]) => event === 'keydown')?.[1] as
+      (event: { keycode: number; shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
+    handler({ keycode: 30, shiftKey: false, altKey: false, ctrlKey: false, metaKey: true });
+    expect(await service.waitForModifiersReleased(0)).toBe(false);
+    handler({ keycode: 30, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
+    expect(await service.waitForModifiersReleased(0)).toBe(true);
+    for (const code of codes) {
+      keyboard.handleKeyDown(code);
+      expect(await service.waitForModifiersReleased(0)).toBe(false);
+      keyboard.handleKeyUp(code);
+      expect(await service.waitForModifiersReleased(0)).toBe(true);
+    }
     service.unregister();
   });
 });

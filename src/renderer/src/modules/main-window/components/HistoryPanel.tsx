@@ -1,3 +1,4 @@
+import { triggerKeyLabel } from '../../../../../shared/constants/keyboard';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useHistory, type HistoryFilter } from '../hooks/useHistory';
 import { useSettings } from '../hooks/SettingsContext';
@@ -81,7 +82,7 @@ export function HistoryPanel({ openSettings }: { openSettings: () => void }) {
       {history.loaded && !history.pending && !history.error && history.items.length === 0 && <div className="empty-state" data-testid="history-empty">
         <div className="empty-symbol" aria-hidden="true">⌥</div>
         <h2>{debouncedQuery || filter !== 'all' ? '沒有符合條件的紀錄' : '開始你的第一次聽寫'}</h2>
-        <p>{debouncedQuery || filter !== 'all' ? '試試其他關鍵字或狀態篩選。' : '按住右 Option 鍵開始聽寫，放開後完成辨識。'}</p>
+        <p>{debouncedQuery || filter !== 'all' ? '試試其他關鍵字或狀態篩選。' : `按住${triggerKeyLabel(settings?.input.triggerKey)} 鍵開始聽寫，放開後完成辨識。`}</p>
       </div>}
       {history.nextCursor && <div className="load-more"><button data-testid="history-load-more" disabled={history.pending || query !== debouncedQuery} onClick={history.loadMore}>載入更多</button></div>}
     </div>

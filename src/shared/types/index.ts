@@ -22,3 +22,5 @@ export type {
 } from './history';
 
 export type { ReportRange, ReportInput, ReportTotals, FillerCount, WordCount, SpeechReport, ReportComment } from './report';
+
+export type { AskResult, AskSource, AskEntry, MemoryStatus } from './memory';

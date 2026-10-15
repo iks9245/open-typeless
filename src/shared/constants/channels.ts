@@ -4,6 +4,7 @@
  */
 
 export const IPC_CHANNELS = {
+  MEMORY: { ASK: 'memory:ask', STATUS: 'memory:status', REINDEX: 'memory:reindex', HISTORY: 'memory:history', ANSWERED: 'ask:answered' },
   SYSTEM: {
     GET_LOGIN_ITEM: 'system:get-login-item',
     SET_LOGIN_ITEM: 'system:set-login-item',
@@ -20,6 +21,7 @@ export const IPC_CHANNELS = {
   },
   FLOATING_WINDOW: {
     MODE: 'floating-window:mode',
+    ANSWER: 'floating-window:answer',
     /** Set content height for adaptive window sizing (Renderer -> Main) */
     SET_CONTENT_HEIGHT: 'floating-window:set-content-height',
   },

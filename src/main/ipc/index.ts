@@ -1,3 +1,4 @@
+import { setupMemoryHandlers } from './memory.handler';
 /**
  * IPC handler registration.
  * Central place to register all IPC handlers.
@@ -21,6 +22,7 @@ export function setupAllIpcHandlers(): void {
   setupSystemHandlers();
   setupPolishHandlers();
   setupReportHandlers();
+  setupMemoryHandlers();
   setupFloatingWindowHandlers();
   setupHistoryHandlers();
   setupSettingsHandlers();

@@ -161,6 +161,8 @@ export async function unusedUrl(): Promise<string> {
 }
 
 export interface FakeOmlx {
+  embeddingRequests: number;
+  lastEmbeddingBody: Record<string, unknown> | null;
   port: number;
   requests: number;
   lastAuthorization: string | null;
@@ -173,6 +175,7 @@ export interface FakeOmlx {
 /** In-process local oMLX API; warm-ups and dictations use the same endpoint. */
 export async function startFakeOmlx(): Promise<FakeOmlx> {
   const state: FakeOmlx = {
+    embeddingRequests: 0, lastEmbeddingBody: null,
     port: 0, requests: 0, lastAuthorization: null, lastBody: null,
     mode: 'ok', reply: '你好，世界。', close: async () => undefined,
   };
@@ -180,19 +183,36 @@ export async function startFakeOmlx(): Promise<FakeOmlx> {
     state.lastAuthorization = req.headers.authorization ?? null;
     if (req.method === 'GET' && req.url === '/v1/models') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ data: [{ id: 'Qwen3.5-9B-4bit' }, { id: 'Qwen3.8-27B-oQ4e-mtp' }] }));
+      res.end(JSON.stringify({ data: [{ id: 'Qwen3.5-9B-4bit' }, { id: 'Qwen3.8-27B-oQ4e-mtp' }, { id: 'Qwen3-Embedding-0.6B' }] }));
       return;
     }
-    if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+    const embedding = req.url === '/v1/embeddings';
+    if (req.method !== 'POST' || (!embedding && req.url !== '/v1/chat/completions')) {
       res.writeHead(404);
       res.end();
       return;
     }
-    state.requests++;
+    if (embedding) state.embeddingRequests++;
+    else state.requests++;
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => {
-      state.lastBody = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (embedding) {
+        state.lastEmbeddingBody = body;
+        const inputs = Array.isArray(body.input) ? body.input : [body.input];
+        // Orthogonal keyword vectors make retrieval assertions independent of model behavior.
+        const data = inputs.map((text: string, index: number) => {
+          const vector = Array<number>(1024).fill(0);
+          const key = /Ken/i.test(text) ? 0 : /Coffee/i.test(text) ? 1 : 2;
+          vector[key] = 1;
+          return { index, embedding: vector };
+        });
+        res.writeHead(state.mode === 'error' ? 500 : 200, { 'content-type': 'application/json' });
+        res.end(state.mode === 'error' ? 'boom' : JSON.stringify({ data }));
+        return;
+      }
+      state.lastBody = body;
       res.writeHead(state.mode === 'error' ? 500 : 200, { 'content-type': 'application/json' });
       res.end(state.mode === 'error' ? 'boom' : JSON.stringify({ choices: [{ message: { content: state.reply } }] }));
     });

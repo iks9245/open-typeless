@@ -1,3 +1,4 @@
+import type { AskEntry } from './shared/types/memory';
 /**
  * Preload script for Electron.
  * Exposes a safe API to the renderer process via contextBridge.
@@ -135,6 +136,17 @@ contextBridge.exposeInMainWorld('api', {
   system: {
     getLoginItem: (): Promise<IpcResult<LoginItemState>> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM.GET_LOGIN_ITEM),
     setLoginItem: (enabled: boolean): Promise<IpcResult<LoginItemState>> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM.SET_LOGIN_ITEM, enabled),
+  },
+  memory: {
+    ask: input => ipcRenderer.invoke(IPC_CHANNELS.MEMORY.ASK, input),
+    status: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY.STATUS),
+    reindex: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY.REINDEX),
+    history: () => ipcRenderer.invoke(IPC_CHANNELS.MEMORY.HISTORY),
+    onAnswered: callback => {
+      const handler = (_event: Electron.IpcRendererEvent, entry: AskEntry): void => { callback(entry); };
+      ipcRenderer.on(IPC_CHANNELS.MEMORY.ANSWERED, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.MEMORY.ANSWERED, handler); };
+    },
   },
   asr: asrApi,
   history: historyApi,

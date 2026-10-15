@@ -21,6 +21,7 @@ describe('settings', () => {
   it('uses environment defaults without storing them', () => {
     const defaults = getDefaultSettings(env);
     expect(defaults).toEqual({
+      memory: { enabled: true },
       history: { enabled: true, saveAudio: false, retentionDays: null },
       asr: { language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
       input: { autoInsert: true, triggerKey: 'right-option' },
@@ -43,6 +44,7 @@ describe('settings', () => {
 
   it('lets stored overrides including null language win over environment defaults', () => {
     const patch = {
+      memory: { enabled: false },
       history: { enabled: false, saveAudio: true, retentionDays: 30 },
       asr: { language: null, whisperServerUrl: 'https://example.com/whisper', vocabulary: [] },
       input: { autoInsert: false, triggerKey: 'right-command' },
@@ -51,7 +53,7 @@ describe('settings', () => {
     };
     expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: patch });
     expect(getSettings(connection.db, env)).toEqual({ success: true, data: patch });
-    expect(connection.db.select().from(settings).all()).toHaveLength(12);
+    expect(connection.db.select().from(settings).all()).toHaveLength(13);
     expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.language'))
       .toEqual({ value: 'null', updated_at: now() });
   });
@@ -100,6 +102,8 @@ describe('settings', () => {
   });
 
   it.each([
+    { memory: { enabled: 'yes' } },
+    { memory: { unknown: true } },
     { command: { enabled: 'yes' } },
     { command: { model: '' } },
     { command: { model: '   ' } },

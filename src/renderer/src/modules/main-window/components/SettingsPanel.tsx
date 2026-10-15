@@ -1,3 +1,4 @@
+import { useMemoryStatus, memoryStatusLabel } from '../hooks/useMemoryStatus';
 import { TRIGGER_KEYS, triggerKeyLabel } from '../../../../../shared/constants/keyboard';
 import { useLoginItem } from '../hooks/useLoginItem';
 import { DEFAULT_COMMAND_MODEL } from '../../../../../shared/constants/command';
@@ -15,6 +16,17 @@ function SettingRow({ title, detail, children }: { title: string; detail?: strin
 
 export function SettingsPanel({ active }: { active: boolean }) {
   const { settings, loading, saving, update, report } = useSettings();
+  const memory = useMemoryStatus(active, settings?.memory.enabled);
+  const [reindexing, setReindexing] = useState(false);
+  const reindex = async () => {
+    if (reindexing) return;
+    setReindexing(true);
+    try {
+      const result = await window.api.memory.reindex();
+      if (mounted.current) report(result.success ? '正在重建索引' : result.error, !result.success);
+    } catch { if (mounted.current) report('無法重建索引', true); }
+    finally { if (mounted.current) setReindexing(false); }
+  };
   const mounted = useMounted();
   const server = useServerStatus(active);
   const polish = usePolishStatus(active);
@@ -143,6 +155,16 @@ export function SettingsPanel({ active }: { active: boolean }) {
           <input type="checkbox" role="switch" className="switch" aria-label="自動插入文字" data-testid="settings-auto-insert"
             checked={settings?.input.autoInsert ?? false} disabled={disabled} onChange={(event) => { void update({ input: { autoInsert: event.target.checked } }); }} />
         </SettingRow>
+      </div></section>
+      <section className="settings-section" aria-labelledby="memory-heading"><h2 id="memory-heading">記憶搜尋</h2><div className="card">
+        <SettingRow title="記憶搜尋" detail="把聽寫紀錄轉成向量存在這台電腦，讓你能用問題搜尋過去說過的話。關閉時會刪除所有向量。">
+          <input type="checkbox" role="switch" className="switch" aria-label="記憶搜尋" data-testid="settings-memory-enabled"
+            checked={settings?.memory.enabled ?? true} disabled={disabled} onChange={event => { void update({ memory: { enabled: event.target.checked } }); }} />
+        </SettingRow>
+        <SettingRow title="索引狀態"><span data-testid="memory-status" role="status">{memory.error ?? memoryStatusLabel(memory.status)}</span>
+          <button data-testid="memory-reindex" disabled={disabled || !settings?.memory.enabled || reindexing} onClick={() => { void reindex(); }}>重建索引</button>
+        </SettingRow>
+        <p className="muted help">按住 Control + {triggerKeyLabel(settings?.input.triggerKey)} 用說的提問，答案只會顯示，不會插入。</p>
       </div></section>
       <section className="settings-section" aria-labelledby="history-heading"><h2 id="history-heading">歷史紀錄</h2><div className="card">
         <SettingRow title="記錄歷史" detail="保存每次聽寫的文字與辨識結果。">

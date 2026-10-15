@@ -198,3 +198,14 @@ main { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
   .report-chart-grid { grid-template-columns: 1fr; gap: 0; }
   .app-header { flex-wrap: wrap; }
 }
+
+.ask-form { display: flex; gap: 12px; margin: 20px 0; }
+.ask-form input { flex: 1; min-width: 0; }
+.ask-answer { white-space: pre-wrap; line-height: 1.9; margin: 16px 0; }
+.citation { display: inline-block; border-radius: 6px; padding: 2px 6px; font-size: 12px; }
+.ask-sources { list-style: none; padding: 0; }
+.ask-sources li { padding: 12px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; scroll-margin: 16px; }
+.ask-sources p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-source-highlight { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ask-history ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.ask-history h2 { margin-top: 24px; }

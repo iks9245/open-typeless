@@ -2,7 +2,7 @@
  * Storage startup in the Electron main process: degraded mode and crash recovery.
  */
 
-import { chmodSync, existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { sql } from 'drizzle-orm';
 import { TMP_DIR, assert, run, test } from './harness';
@@ -52,7 +52,9 @@ run(async () => {
     const row = historyService.get(id);
     assert(row.success && row.data?.status === 'failed' && row.data.errorCode === 'interrupted', 'row interrupted', row);
     const migrations = db.getDb().get<{ c: number }>(sql`select count(*) as c from __drizzle_migrations`);
-    assert(migrations.c === 1, 'migrations applied once', migrations);
+    // Each migration in the journal is applied exactly once, however many launches there were
+    const journal = JSON.parse(readFileSync(path.join(drizzle, 'meta', '_journal.json'), 'utf8')) as { entries: unknown[] };
+    assert(migrations.c === journal.entries.length, 'migrations applied once', { applied: migrations.c, journal: journal.entries.length });
     db.closeDatabase();
   });
 });

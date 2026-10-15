@@ -57,7 +57,7 @@ run(async () => {
     const keys = await ui.exec<{ api: string[]; asr: string[] }>(`({
       api: Object.keys(window.api).sort(), asr: Object.keys(window.api.asr).sort()
     })`);
-    assert(JSON.stringify(keys.api) === JSON.stringify(['asr', 'history', 'polish', 'report', 'settings', 'system', 'whisperServer']),
+    assert(JSON.stringify(keys.api) === JSON.stringify(['asr', 'history', 'memory', 'polish', 'report', 'settings', 'system', 'whisperServer']),
       'main API has no floatingWindow key', keys);
     assert(JSON.stringify(keys.asr) === JSON.stringify(['onError', 'onResult', 'onStatus', 'sendAudio']),
       'ASR API has no start or stop keys', keys);

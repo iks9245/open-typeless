@@ -11,7 +11,7 @@ export {
   closeDatabase,
 } from './client';
 export type { AppDatabase } from './client';
-export { transcriptions, settings } from './schema';
+export { transcriptions, settings, historyEmbeddings } from './schema';
 export type { Transcription, NewTranscription, SettingRow } from './schema';
 export { resolveMigrationsFolder, runMigrations } from './migrate';
 export { initDatabase } from './init';

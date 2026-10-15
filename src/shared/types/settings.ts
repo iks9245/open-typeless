@@ -6,6 +6,7 @@
 import type { TriggerKeyId } from '../constants/keyboard';
 
 export interface AppSettings {
+  memory: { enabled: boolean };
   history: {
     enabled: boolean;
     saveAudio: boolean;
@@ -32,6 +33,7 @@ export interface AppSettings {
 }
 
 export interface AppSettingsPatch {
+  memory?: Partial<AppSettings['memory']>;
   history?: Partial<AppSettings['history']>;
   asr?: Partial<AppSettings['asr']>;
   polish?: Partial<AppSettings['polish']>;

@@ -3,7 +3,7 @@
  * Defines transcription history and user settings with Drizzle.
  */
 
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { blob, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import {
   ASR_ENGINES,
   INSERT_STATUSES,
@@ -46,3 +46,18 @@ export const settings = sqliteTable('settings', {
 export type Transcription = typeof transcriptions.$inferSelect;
 export type NewTranscription = typeof transcriptions.$inferInsert;
 export type SettingRow = typeof settings.$inferSelect;
+
+/** Local, disposable vectors; source deletion is enforced by SQLite. */
+export const historyEmbeddings = sqliteTable('history_embeddings', {
+  id: text('id').primaryKey(),
+  transcriptionId: text('transcription_id').notNull().references(() => transcriptions.id, { onDelete: 'cascade' }),
+  chunkIndex: integer('chunk_index').notNull(),
+  model: text('model').notNull(),
+  dim: integer('dim').notNull(),
+  vector: blob('vector', { mode: 'buffer' }).notNull(),
+  textHash: text('text_hash').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  index('idx_history_embeddings_transcription_id').on(table.transcriptionId),
+  index('idx_history_embeddings_model').on(table.model),
+]);

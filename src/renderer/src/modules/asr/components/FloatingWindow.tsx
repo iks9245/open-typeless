@@ -1,3 +1,4 @@
+import type { AskResult } from '../../../../../shared/types/memory';
 /**
  * Floating Window Component.
  * The main component for the ASR floating window that displays status and transcription.
@@ -29,6 +30,9 @@ import { ErrorDisplay } from './ErrorDisplay';
  */
 export function FloatingWindow(): ReactNode {
   const { status, result, error } = useASRStatus();
+  const [answer, setAnswer] = useState<AskResult | null>(null);
+  useEffect(() => floatingApi.floatingWindow.onAnswer(setAnswer), []);
+  useEffect(() => { if (status === 'connecting') setAnswer(null); }, [status]);
   const [mode, setMode] = useState<InputMode>('dictation');
   useEffect(() => floatingApi.floatingWindow.onMode(setMode), []);
 
@@ -47,13 +51,16 @@ export function FloatingWindow(): ReactNode {
         {/* Status indicator - always visible */}
         <div className="floating-window__status">
           {showStatusIndicator && <StatusIndicator status={status} />}
+          {mode === 'ask' && <span className="floating-window__mode">問你的過去</span>}
           {mode === 'command' && <span className="floating-window__mode">指令模式</span>}
         </div>
 
         {/* Transcript display - show during listening, processing, and done */}
         {hasTranscriptText && result && (
-          <TranscriptDisplay text={result.text} interim={!result.isFinal} />
+          <TranscriptDisplay answer={mode === 'ask' && answer !== null && status === 'done'} text={result.text} interim={!result.isFinal} />
         )}
+
+        {mode === 'ask' && answer && status === 'done' && <p className="floating-window__sources">依據 {answer.sources.length} 筆紀錄</p>}
 
         {/* Error display */}
         {error && <ErrorDisplay message={error} />}

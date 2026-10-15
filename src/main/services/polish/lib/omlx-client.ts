@@ -57,3 +57,27 @@ export async function createCompletion(
   if (parsed.success === false) throw new Error('Invalid oMLX completion response');
   return parsed.data.choices[0].message.content;
 }
+
+/** OpenAI-compatible local embeddings, ordered by the response index. */
+export async function createEmbeddings(
+  config: OmlxConfig,
+  options: { model: string; input: string | string[] },
+  fetch: typeof globalThis.fetch,
+  signal: AbortSignal,
+): Promise<number[][]> {
+  const response = await fetch(`${config.baseUrl}/embeddings`, {
+    method: 'POST', headers: { ...headers(config), 'Content-Type': 'application/json' },
+    body: JSON.stringify(options), signal, redirect: 'error',
+  });
+  const parsed = z.object({ data: z.array(z.object({
+    index: z.number().int().nonnegative(), embedding: z.array(z.number().finite()).min(1),
+  })).min(1) }).safeParse(await responseJson(response));
+  const count = typeof options.input === 'string' ? 1 : options.input.length;
+  if (parsed.success === false) throw new Error('Invalid oMLX embeddings response');
+  const rows = parsed.data.data.sort((a, b) => a.index - b.index);
+  if (rows.length !== count || rows.some((row, i) => row.index !== i || row.embedding.length !== rows[0].embedding.length ||
+    !row.embedding.some(value => value !== 0) || row.embedding.some(value => !Number.isFinite(Math.fround(value))))) {
+    throw new Error('Invalid oMLX embeddings response');
+  }
+  return rows.map(row => row.embedding);
+}

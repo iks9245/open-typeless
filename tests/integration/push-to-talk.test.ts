@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { count, eq, inArray } from 'drizzle-orm';
-import { TMP_DIR, assert, run, silenceChunk, startFakeWhisper, test, toneChunk, unusedUrl, until, wait } from './harness';
+import { TMP_DIR, assert, run, silenceChunk, startFakeOmlx, startFakeWhisper, writeOmlxSettings, test, toneChunk, unusedUrl, until, wait } from './harness';
 
 interface PushToTalkInternals {
   handleKeyDown(): Promise<void>;
@@ -34,6 +34,7 @@ run(async () => {
   const { textInputService } = await import('../../src/main/services/text-input');
   const { keyboardService } = await import('../../src/main/services/keyboard');
   const { pushToTalkService } = await import('../../src/main/services/push-to-talk/push-to-talk.service');
+  const { floatingWindow } = await import('../../src/main/windows');
 
   // asr.handler registers this listener in the app; without it EventEmitter throws on 'error'
   asrService.on('error', () => undefined);
@@ -79,6 +80,48 @@ run(async () => {
     assert(row.insertStatus === 'inserted', 'insert status recorded', row);
     assert(row.audioDurationMs === 1000 && typeof row.latencyMs === 'number', 'duration and latency recorded', row);
   });
+
+  const omlx = await startFakeOmlx();
+  await test('AI polish inserts polished text, preserves raw history and sends the configured model and key', async () => {
+    await writeOmlxSettings(omlx.port, 'test-key');
+    configure({ polish: { enabled: true, model: 'Qwen3.8-27B-oQ4e-mtp' } });
+    const emitted: string[] = [];
+    const displayed: string[] = [];
+    const onStatus = (status: string) => { emitted.push(status); };
+    const sendStatus = floatingWindow.sendStatus;
+    floatingWindow.sendStatus = (status) => { displayed.push(status); sendStatus.call(floatingWindow, status); };
+    asrService.on('status', onStatus);
+    try {
+      await session();
+    } finally {
+      asrService.off('status', onStatus);
+      floatingWindow.sendStatus = sendStatus;
+    }
+    // The floating window stays at 'processing' until the polished text is shown
+    const afterStop = displayed.slice(displayed.indexOf('processing'));
+    assert(afterStop.indexOf('done') === afterStop.length - 1 && !afterStop.includes('idle'), 'floating window kept processing while polishing', displayed);
+    assert(emitted.at(-1) === 'idle', 'ASR listeners still see the real status', emitted);
+    const row = latest();
+    assert(inserted.at(-1) === '你好，世界。', 'polished text inserted', inserted.at(-1));
+    assert(row.rawText === '你好世界' && row.finalText === '你好，世界。', 'raw and polished history recorded', row);
+    assert(omlx.lastAuthorization === 'Bearer test-key', 'API key sent');
+    assert(omlx.lastBody?.model === 'Qwen3.8-27B-oQ4e-mtp', 'configured model used', omlx.lastBody?.model);
+    assert((omlx.lastBody?.chat_template_kwargs as { enable_thinking?: boolean })?.enable_thinking === false, 'thinking disabled');
+  });
+
+  await test('oMLX failure falls back to the raw transcript', async () => {
+    try {
+      omlx.mode = 'error';
+      await session();
+      assert(inserted.at(-1) === '你好世界', 'raw text inserted', inserted.at(-1));
+      assert(latest().rawText === '你好世界' && latest().finalText === '你好世界', 'raw history preserved', latest());
+    } finally {
+      configure({ polish: { enabled: false } });
+      await writeOmlxSettings(null, null);
+      omlx.mode = 'ok';
+    }
+  });
+  await omlx.close();
 
   await test('with autoInsert off nothing is typed and the row says skipped', async () => {
     configure({ input: { autoInsert: false } });

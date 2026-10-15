@@ -9,6 +9,7 @@
 
 import http from 'node:http';
 import net from 'node:net';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import log from 'electron-log';
@@ -150,4 +151,65 @@ export async function unusedUrl(): Promise<string> {
   const { port } = server.address() as net.AddressInfo;
   await new Promise<void>((resolve) => server.close(() => resolve()));
   return `http://127.0.0.1:${port}`;
+}
+
+export interface FakeOmlx {
+  port: number;
+  requests: number;
+  lastAuthorization: string | null;
+  lastBody: Record<string, unknown> | null;
+  mode: 'ok' | 'error';
+  reply: string;
+  close: () => Promise<void>;
+}
+
+/** In-process local oMLX API; warm-ups and dictations use the same endpoint. */
+export async function startFakeOmlx(): Promise<FakeOmlx> {
+  const state: FakeOmlx = {
+    port: 0, requests: 0, lastAuthorization: null, lastBody: null,
+    mode: 'ok', reply: '你好，世界。', close: async () => undefined,
+  };
+  const server = http.createServer((req, res) => {
+    state.lastAuthorization = req.headers.authorization ?? null;
+    if (req.method === 'GET' && req.url === '/v1/models') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ data: [{ id: 'Qwen3.5-9B-4bit' }, { id: 'Qwen3.8-27B-oQ4e-mtp' }] }));
+      return;
+    }
+    if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    state.requests++;
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      state.lastBody = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      res.writeHead(state.mode === 'error' ? 500 : 200, { 'content-type': 'application/json' });
+      res.end(state.mode === 'error' ? 'boom' : JSON.stringify({ choices: [{ message: { content: state.reply } }] }));
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  state.port = (server.address() as net.AddressInfo).port;
+  state.close = () => new Promise(resolve => {
+    server.closeAllConnections();
+    server.close(() => resolve());
+  });
+  return state;
+}
+
+/** Only writes the integration runner's isolated config; never the user's home. */
+export async function writeOmlxSettings(port: number | null, apiKey: string | null): Promise<void> {
+  const file = process.env.OMLX_SETTINGS_PATH;
+  if (!file || !file.startsWith(`${TMP_DIR}${path.sep}`)) throw new Error('Missing isolated OMLX_SETTINGS_PATH');
+  if (port === null) {
+    await rm(file, { force: true });
+    return;
+  }
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify({ server: { port }, auth: { api_key: apiKey } }), { mode: 0o600 });
 }

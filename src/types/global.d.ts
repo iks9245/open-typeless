@@ -6,6 +6,7 @@
 import type { ASRConfig, ASRResult, ASRStatus } from '../shared/types/asr';
 import type { IpcResult } from '../shared/types/common';
 import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from '../shared/types/history';
+import type { PolishInfo } from '../shared/types/polish';
 import type { AppSettings, AppSettingsPatch } from '../shared/types/settings';
 import type { WhisperServerInfo } from '../shared/types/whisper-server';
 
@@ -150,6 +151,7 @@ interface AppApi {
   history: HistoryApi;
   settings: SettingsApi;
   whisperServer: WhisperServerApi;
+  polish: { getStatus: () => Promise<IpcResult<PolishInfo>> };
 }
 
 declare global {

@@ -12,6 +12,7 @@ export function HistoryItem({ item, onDeleted }: { item: TranscriptionItem; onDe
   const { report } = useSettings();
   const text = item.finalText ?? item.rawText ?? '';
   const date = new Date(item.createdAt);
+  const polished = Boolean(item.rawText && item.finalText && item.rawText !== item.finalText);
 
   const copy = async () => {
     try {
@@ -46,10 +47,12 @@ export function HistoryItem({ item, onDeleted }: { item: TranscriptionItem; onDe
       <div className="history-item-heading">
         <time dateTime={Number.isFinite(date.getTime()) ? date.toISOString() : undefined}>{formatHistoryTime(item.createdAt)}</time>
         <span className={`badge badge-${item.status}`}>{statusLabel(item.status)}</span>
+        {polished && <span className="badge badge-polished" data-testid="history-polished">已潤稿</span>}
       </div>
       <p className={item.status === 'failed' ? 'history-text error-text' : 'history-text'} data-testid="history-text">
         {item.status === 'failed' ? errorCodeLabel(item.errorCode) : text || '沒有辨識到文字'}
       </p>
+      {polished && <details className="history-raw" data-testid="history-raw"><summary>原始辨識</summary><p>{item.rawText}</p></details>}
       {item.status === 'failed' && item.errorMessage && <p className="muted error-detail">{item.errorMessage}</p>}
       <div className="history-item-footer">
         <div className="metadata">

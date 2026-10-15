@@ -94,6 +94,8 @@ export class ASRService extends EventEmitter {
   private finalResult: ASRResult | null = null;
   private lastResult: ASRResult | null = null;
   private sessionError: string | null = null;
+  /** Push-to-talk owns the final display when post-processing follows ASR. */
+  private keepProcessing = false;
 
   /**
    * Get current ASR status.
@@ -177,7 +179,7 @@ export class ASRService extends EventEmitter {
    *
    * @returns The result together with audio duration, latency, error and submitted WAV
    */
-  async stopWithOutcome(): Promise<ASRSessionOutcome> {
+  async stopWithOutcome(options: { keepProcessing?: boolean } = {}): Promise<ASRSessionOutcome> {
     const startedAt = Date.now();
 
     if (!this.client || this.status === 'idle') {
@@ -187,21 +189,26 @@ export class ASRService extends EventEmitter {
 
     logger.info('Stopping ASR session');
 
-    // Signal end of audio to get final result
-    if (this.client.isConnected) {
-      this.client.finishAudio();
+    this.keepProcessing = options.keepProcessing ?? false;
+    try {
+      // Signal end of audio to get final result
+      if (this.client.isConnected) {
+        this.client.finishAudio();
 
-      // Wait for final result with timeout
-      const result = await this.waitForFinalResult();
-      // Read submitted audio before cleanup() disconnects the client and clears it
-      const outcome = this.buildOutcome(result, startedAt);
+        // Wait for final result with timeout
+        const result = await this.waitForFinalResult();
+        // Read submitted audio before cleanup() disconnects the client and clears it
+        const outcome = this.buildOutcome(result, startedAt);
+        this.cleanup();
+        return outcome;
+      }
+
+      const outcome = this.buildOutcome(this.finalResult, startedAt);
       this.cleanup();
       return outcome;
+    } finally {
+      this.keepProcessing = false;
     }
-
-    const outcome = this.buildOutcome(this.finalResult, startedAt);
-    this.cleanup();
-    return outcome;
   }
 
   /**
@@ -276,7 +283,8 @@ export class ASRService extends EventEmitter {
   private updateStatus(status: ASRStatus): void {
     this.status = status;
     this.emit('status', status);
-    floatingWindow.sendStatus(status);
+    // Only the floating window is held at 'processing'; listeners still see the real status
+    floatingWindow.sendStatus(this.keepProcessing && (status === 'done' || status === 'idle') ? 'processing' : status);
     logger.debug('Status updated', { status });
   }
 

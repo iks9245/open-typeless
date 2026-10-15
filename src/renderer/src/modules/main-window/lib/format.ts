@@ -1,3 +1,5 @@
+import type { PolishUnavailableReason } from '../../../../../shared/types/polish';
+import { RECOMMENDED_POLISH_MODELS } from '../../../../../shared/constants/polish';
 import type { InsertStatus, TranscriptionStatus } from '../../../../../shared/constants/history';
 import type { WhisperServerInfo } from '../../../../../shared/types/whisper-server';
 
@@ -52,4 +54,23 @@ export function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error) return error;
   return '發生未知錯誤，請再試一次。';
+}
+
+export function polishReasonLabel(reason: PolishUnavailableReason | null): string {
+  switch (reason) {
+    case 'not-installed': return '找不到 oMLX，請先安裝並啟動 oMLX。';
+    case 'unauthorized': return 'oMLX 拒絕連線，請檢查 API 金鑰設定。';
+    default: return 'oMLX 未啟動或無法連線。';
+  }
+}
+
+export function polishModelOptions(models: readonly string[], current: string): { id: string; label: string }[] {
+  const installed = new Set(models);
+  const options: { id: string; label: string }[] = [];
+  for (const { id, label } of RECOMMENDED_POLISH_MODELS) {
+    if (installed.delete(id)) options.push({ id, label: `${id} · ${label}` });
+  }
+  for (const id of [...installed].sort((a, b) => a.localeCompare(b))) options.push({ id, label: id });
+  if (current && !models.includes(current)) options.push({ id: current, label: `${current}（未安裝）` });
+  return options;
 }

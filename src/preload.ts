@@ -9,6 +9,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from './shared/constants/channels';
 import type { ASRConfig, ASRResult, ASRStatus } from './shared/types/asr';
+import type { PolishInfo } from './shared/types/polish';
 import type { IpcResult } from './shared/types/common';
 import type { HistoryChange, ListHistoryInput, ListHistoryResult, TranscriptionItem } from './shared/types/history';
 import type { AppSettings, AppSettingsPatch } from './shared/types/settings';
@@ -201,6 +202,12 @@ const whisperServerApi = {
     ipcRenderer.invoke(IPC_CHANNELS.WHISPER_SERVER.STATUS),
 };
 
+const polishApi = {
+  /** Read local oMLX availability and installed model IDs. */
+  getStatus: (): Promise<IpcResult<PolishInfo>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.POLISH.STATUS),
+};
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('api', {
   asr: asrApi,
@@ -208,4 +215,5 @@ contextBridge.exposeInMainWorld('api', {
   history: historyApi,
   settings: settingsApi,
   whisperServer: whisperServerApi,
+  polish: polishApi,
 });

@@ -179,6 +179,25 @@ run(async () => {
     await ui.screenshot('3-settings-light');
   });
 
+  await test('the polish section shows the not-installed state and disables its switch', async () => {
+    await ui.click('tab-settings');
+    await ui.waitUntil('oMLX missing status', `document.querySelector('[data-testid="polish-status"]')?.textContent.includes('找不到 oMLX，請先安裝並啟動 oMLX。')`, 3000);
+    assert(await ui.exec<boolean>(`document.querySelector('#polish-heading')?.textContent === 'AI 潤稿'`), 'polish section shown');
+    assert(await ui.exec<boolean>(`document.querySelector('[data-testid="settings-polish-enabled"]').disabled`), 'polish switch disabled');
+    assert(await ui.exec<boolean>(`document.querySelector('[data-testid="settings-polish-model"]').disabled`), 'model select disabled');
+  });
+
+  await test('polished history shows the badge and original transcription', async () => {
+    const id = historyService.begin({ engine: 'whisper.cpp' });
+    assert(id, 'session begun');
+    await historyService.complete(id, { rawText: '你好世界', finalText: '你好，世界。', audioDurationMs: 1000, latencyMs: 600, detectedLanguage: null });
+    await ui.click('tab-history');
+    await ui.waitFor('history-polished', { count: 1, timeoutMs: 3000 });
+    assert((await ui.text('history-raw')).includes('原始辨識'), 'original disclosure shown');
+    await ui.exec(`document.querySelector('[data-testid="history-raw"] summary').click()`);
+    assert((await ui.text('history-raw')).includes('你好世界'), 'raw text shown');
+  });
+
   await test('clearing history asks for confirmation, then shows the empty state', async () => {
     await ui.click('tab-history');
     await ui.click('history-clear');

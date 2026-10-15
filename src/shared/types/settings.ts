@@ -15,6 +15,10 @@ export interface AppSettings {
     /** Proper nouns and terms that recognition should favor */
     vocabulary: string[];
   };
+  polish: {
+    enabled: boolean;
+    model: string;
+  };
   input: {
     autoInsert: boolean;
   };
@@ -23,5 +27,6 @@ export interface AppSettings {
 export interface AppSettingsPatch {
   history?: Partial<AppSettings['history']>;
   asr?: Partial<AppSettings['asr']>;
+  polish?: Partial<AppSettings['polish']>;
   input?: Partial<AppSettings['input']>;
 }

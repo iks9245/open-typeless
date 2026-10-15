@@ -3,6 +3,7 @@
  * Central place to register all IPC handlers.
  */
 
+import { setupPolishHandlers } from './polish.handler';
 import { setupASRHandlers } from './asr.handler';
 import { setupFloatingWindowHandlers } from './floating-window.handler';
 import { setupHistoryHandlers } from './history.handler';
@@ -15,6 +16,7 @@ import { setupWhisperServerHandlers } from './whisper-server.handler';
  */
 export function setupAllIpcHandlers(): void {
   setupASRHandlers();
+  setupPolishHandlers();
   setupFloatingWindowHandlers();
   setupHistoryHandlers();
   setupSettingsHandlers();

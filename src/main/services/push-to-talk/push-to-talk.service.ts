@@ -25,6 +25,7 @@ import { textInputService } from '../text-input';
 import { asrService } from '../asr';
 import type { ASRSessionOutcome } from '../asr';
 import { historyService } from '../history';
+import { polishService } from '../polish';
 import { settingsService } from '../settings';
 import { permissionsService } from '../permissions';
 import { floatingWindow } from '../../windows';
@@ -260,6 +261,9 @@ export class PushToTalkService {
 
     // Best effort: returns null when history is disabled or storage is unavailable
     const settings = settingsService.get();
+    if (settings.success === true && settings.data.polish.enabled) {
+      polishService.warmUp(settings.data.polish.model);
+    }
     this.historyId = historyService.begin({
       engine: 'whisper.cpp',
       language: settings.success ? settings.data.asr.language : null,
@@ -334,7 +338,10 @@ export class PushToTalkService {
       this.notifyRendererStopRecording();
 
       // Stop ASR and get final result
-      const outcome = await asrService.stopWithOutcome();
+      const settings = settingsService.get();
+      const outcome = await asrService.stopWithOutcome({
+        keepProcessing: settings.success === true && settings.data.polish.enabled,
+      });
       const result = outcome.result;
 
       if (result && result.text) {
@@ -343,8 +350,21 @@ export class PushToTalkService {
           isFinal: result.isFinal,
         });
 
+        let finalText = result.text;
+        let polishLatencyMs = 0;
+        if (settings.success === true && settings.data.polish.enabled) {
+          const polished = await polishService.polish(result.text, {
+            model: settings.data.polish.model, vocabulary: settings.data.asr.vocabulary,
+          });
+          finalText = polished.text;
+          polishLatencyMs = polished.latencyMs;
+          logger.info('AI polish completed', {
+            polished: polished.polished, latencyMs: polished.latencyMs, error: polished.error,
+          });
+        }
+
         // Send result to floating window
-        floatingWindow.sendResult(result);
+        floatingWindow.sendResult({ ...result, text: finalText });
         floatingWindow.sendStatus('done');
 
         // IMPORTANT: Hide floating window FIRST to return focus to the previous app
@@ -357,7 +377,7 @@ export class PushToTalkService {
           // Wait for focus to return to the previous application
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          const insertResult = textInputService.insert(result.text);
+          const insertResult = textInputService.insert(finalText);
 
           if (!insertResult.success) {
             logger.error('Failed to insert text', { error: insertResult.error });
@@ -371,7 +391,7 @@ export class PushToTalkService {
         }
 
         // Record after insertion so history never delays typing; audio is written in the background
-        this.recordCompletion(historyId, outcome, result.text, insert);
+        this.recordCompletion(historyId, outcome, result.text, finalText, polishLatencyMs, insert);
       } else {
         logger.info('No ASR result to insert');
 
@@ -380,7 +400,7 @@ export class PushToTalkService {
           historyService.fail(historyId, 'transcription_failed', outcome.error);
         } else {
           floatingWindow.hide();
-          this.recordCompletion(historyId, outcome, '');
+          this.recordCompletion(historyId, outcome, '', '');
         }
       }
 
@@ -465,14 +485,16 @@ export class PushToTalkService {
   private recordCompletion(
     historyId: string | null,
     outcome: ASRSessionOutcome,
-    text: string,
+    rawText: string,
+    finalText: string,
+    polishLatencyMs = 0,
     insert?: { status: 'inserted' | 'failed' | 'skipped'; error?: string },
   ): void {
     void historyService.complete(historyId, {
-      rawText: text,
-      finalText: text,
+      rawText,
+      finalText,
       audioDurationMs: outcome.audioDurationMs,
-      latencyMs: outcome.latencyMs,
+      latencyMs: outcome.latencyMs + polishLatencyMs,
       detectedLanguage: outcome.detectedLanguage,
       ...(insert === undefined ? {} : { insert }),
       wav: outcome.wav,

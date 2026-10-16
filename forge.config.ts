@@ -9,7 +9,7 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import path from 'path';
 import { cp, mkdir, readdir } from 'fs/promises';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
@@ -56,13 +56,28 @@ const config: ForgeConfig = {
     asar: {
       unpack: '*.{node,dll}',
     },
-    // Drizzle migration SQL, read at startup from process.resourcesPath/drizzle
-    extraResource: ['./drizzle'],
+    // Migrations and the self-contained server live outside app.asar in Resources.
+    extraResource: ['./drizzle', './resources/bin/whisper-server', './resources/bin/whisper-server.version'],
+    extendInfo: { LSMinimumSystemVersion: '13.3' },
   },
   rebuildConfig: {
     force: true,
   },
   hooks: {
+    generateAssets: async (_forgeConfig, platform, arch) => {
+      if (platform !== 'darwin' || arch !== 'arm64') {
+        console.log(`Skipping bundled whisper-server build for ${platform}-${arch} (requires darwin-arm64)`);
+        return;
+      }
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn('bash', [path.join(__dirname, 'scripts/build-whisper-server.sh')], { stdio: 'inherit' });
+        child.once('error', reject);
+        child.once('close', (code, signal) => {
+          if (code === 0) resolve();
+          else reject(new Error(`whisper-server build failed (${signal ?? code})`));
+        });
+      });
+    },
     // Copy native modules after packaging
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       const sourceNodeModulesPath = path.resolve(__dirname, 'node_modules');
@@ -99,7 +114,9 @@ const config: ForgeConfig = {
       for (const outputPath of outputPaths) {
         const bundles = (await readdir(outputPath)).filter((entry) => entry.endsWith('.app'));
         for (const bundle of bundles) {
-          await execFileAsync('codesign', ['--force', '--deep', '--sign', identity, path.join(outputPath, bundle)]);
+          const appPath = path.join(outputPath, bundle);
+          await execFileAsync('codesign', ['--force', '--sign', identity, path.join(appPath, 'Contents', 'Resources', 'whisper-server')]);
+          await execFileAsync('codesign', ['--force', '--deep', '--sign', identity, appPath]);
         }
       }
     },

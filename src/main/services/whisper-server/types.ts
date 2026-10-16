@@ -3,10 +3,12 @@
  */
 
 import type { ChildProcess } from 'node:child_process';
+import type { WhisperBinarySource } from '../../../shared/types/whisper-server';
 import type { WhisperModelDependencies } from './lib/models';
 
 export interface WhisperLaunchPlan {
   binary: string;
+  binarySource: Exclude<WhisperBinarySource, null>;
   model: string;
   modelId: string | null;
   modelFallback: boolean;
@@ -27,6 +29,7 @@ export type WhisperEndpoint =
 
 export interface WhisperDiscoveryInputs extends WhisperModelDependencies {
   env: Record<string, string | undefined>;
+  bundledBinary: () => string | null;
   fileExists: (path: string) => boolean;
 }
 
@@ -50,6 +53,7 @@ export interface WhisperServerStatus {
   state: 'idle' | 'starting' | 'ready' | 'stopped' | 'failed';
   pid: number | null;
   binary: string | null;
+  binarySource: WhisperBinarySource;
   model: string | null;
   vadModel: string | null;
   reason: string | null;

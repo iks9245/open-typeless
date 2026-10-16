@@ -5,12 +5,13 @@
  * - both preload bundles and renderer Content-Security-Policy meta tags
  * - migrations shipped in Resources/drizzle
  * - runtime modules required by the main bundle present in app.asar
+ * - bundled whisper-server architecture, system links, macOS minimum, signature and help
  * - code signature identifier matching CFBundleIdentifier (needed for the
  *   microphone prompt) and a valid deep signature
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import asar from '@electron/asar';
@@ -58,7 +59,10 @@ check(hasModule(`@xitanggg/node-insert-text-darwin-${process.arch}`) || hasModul
 check(existsSync(path.join(resources, 'app.asar.unpacked', 'node_modules', 'better-sqlite3', 'prebuilds', `darwin-${process.arch}.node`)),
   'the better-sqlite3 prebuild is unpacked');
 
-const bundleId = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', path.join(app, 'Contents', 'Info.plist')]).toString().trim();
+const plist = path.join(app, 'Contents', 'Info.plist');
+const bundleId = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', plist]).toString().trim();
+const minimumSystemVersion = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :LSMinimumSystemVersion', plist], { encoding: 'utf8' });
+check(minimumSystemVersion.status === 0 && minimumSystemVersion.stdout.trim() === '13.3', 'Info.plist requires macOS 13.3');
 // codesign -dv prints its details on stderr
 const signature = spawnSync('codesign', ['-dvv', app], { encoding: 'utf8' }).stderr;
 const identifier = signature.match(/^Identifier=(.+)$/m)?.[1];
@@ -73,6 +77,45 @@ check(validSignature, 'codesign --verify --deep --strict passes');
 // Informational: an ad-hoc build loses macOS privacy grants on every rebuild
 const authority = signature.match(/^Authority=(.+)$/m)?.[1];
 console.log(`ℹ signed ${/^Signature=adhoc$/m.test(signature) ? 'ad-hoc' : `by "${authority ?? 'unknown'}"`}`);
+
+const whisper = path.join(resources, 'whisper-server');
+check(existsSync(whisper) && statSync(whisper).isFile(), 'whisper-server is in Resources');
+let executable = false;
+try {
+  accessSync(whisper, constants.X_OK);
+  executable = statSync(whisper).isFile();
+} catch { /* Report a missing or non-executable binary below. */ }
+check(executable, 'whisper-server is executable');
+if (executable) {
+  const architectures = spawnSync('lipo', ['-archs', whisper], { encoding: 'utf8' });
+  check(architectures.status === 0 && architectures.stdout.trim() === 'arm64', 'whisper-server is arm64-only');
+
+  const linked = spawnSync('otool', ['-L', whisper], { encoding: 'utf8' });
+  const libraries = linked.stdout?.trim().split('\n').slice(1).map(line => line.trim().split(/\s+/)[0]) ?? [];
+  check(linked.status === 0 && libraries.length > 0 && libraries.every(library => /^(\/usr\/lib\/|\/System\/Library\/)/.test(library)),
+    'whisper-server links only system libraries and frameworks');
+
+  const loadCommands = spawnSync('otool', ['-l', whisper], { encoding: 'utf8' });
+  const buildVersion = loadCommands.stdout?.split(/Load command \d+/).find(command => /\bcmd LC_BUILD_VERSION\b/.test(command));
+  check(loadCommands.status === 0 && /^\s*minos 13\.3(?:\.0)?\s*$/m.test(buildVersion ?? ''), 'whisper-server minos is 13.3');
+
+  const verified = spawnSync('codesign', ['--verify', '--strict', whisper], { encoding: 'utf8' });
+  check(verified.status === 0, 'whisper-server codesign --verify --strict passes');
+  const whisperSignature = spawnSync('codesign', ['-dvv', whisper], { encoding: 'utf8' });
+  const authorities = details => details?.match(/^Authority=.+$/gm)?.join('\n');
+  const appAuthorities = authorities(signature);
+  const sameAuthority = appAuthorities
+    ? appAuthorities === authorities(whisperSignature.stderr)
+    : /^Signature=adhoc$/m.test(signature) && /^Signature=adhoc$/m.test(whisperSignature.stderr ?? '');
+  check(whisperSignature.status === 0 && sameAuthority, 'whisper-server is signed by the same authority as the app (or both ad-hoc)');
+
+  // Pinned whisper.cpp v1.9.5 exits 0 for --help (examples/server/server.cpp).
+  const help = spawnSync(whisper, ['--help'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  check(!help.error && help.status === 0, 'whisper-server --help exits 0 within 10 seconds');
+}
+const stamp = path.join(resources, 'whisper-server.version');
+check(existsSync(stamp), 'whisper-server version stamp is packaged');
+if (existsSync(stamp)) console.log(`ℹ ${readFileSync(stamp, 'utf8').trim()}`);
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} packaging check(s) failed`);

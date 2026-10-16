@@ -20,19 +20,23 @@ macOS 語音輸入工具：按住快捷鍵說話，放開後自動把文字插�
 
 ## 系統需求
 
-- macOS 12.0 以上（已在 Apple Silicon 上驗證）
-- Node.js 22（Vite 需要 18 或 20 以上）
-- pnpm 10
-- 已編譯的 whisper.cpp 與一個 ggml 模型
+- Apple Silicon Mac（M1 或更新），macOS 13.3 以上
+- 一個 ggml 辨識模型（需另外下載）
+- 從原始碼開發時另需 Node.js 22、pnpm 10、Xcode Command Line Tools 與 CMake
 
 ## 快速開始
 
-### 1. 準備 whisper.cpp
+### 使用打包版
+
+打包版已內建 whisper-server，**不需要安裝或編譯 whisper.cpp**。開啟 app，在「設定 → 語音辨識」按「打開模型資料夾」，放入下載好的 ggml `.bin` 模型，再從「辨識模型」選單選取它。模型來源可參考下方的 whisper.cpp 模型或粵語模型說明；伺服器程式旁會顯示「內建」。
+
+### 1. 準備模型（從原始碼開發）
+
+以下用 whisper.cpp 的下載腳本取得模型；不需要編譯它的伺服器：
 
 ```bash
 git clone https://github.com/ggml-org/whisper.cpp ~/whisper.cpp
 cd ~/whisper.cpp
-cmake -B build && cmake --build build -j --config Release
 ./models/download-ggml-model.sh large-v3-turbo
 ```
 
@@ -50,7 +54,7 @@ cmake -B build && cmake --build build -j --config Release
 
 | 項目 | 自動偵測位置 | 覆寫用環境變數 |
 |---|---|---|
-| 伺服器程式 | `~/whisper.cpp/build/bin/whisper-server`、`/opt/homebrew/bin/`、`/usr/local/bin/` | `WHISPER_SERVER_BIN` |
+| 伺服器程式 | 優先使用內建程式，再找 `~/whisper.cpp/build/bin/whisper-server`、`/opt/homebrew/bin/whisper-server`、`/usr/local/bin/whisper-server` | `WHISPER_SERVER_BIN`（最高優先權） |
 | 模型 | `~/whisper.cpp/models/` 中依序找 large-v3-turbo、large-v3、medium、small、base | `WHISPER_MODEL_PATH` |
 | VAD 模型（選用） | `~/whisper.cpp/models/ggml-silero-*.bin`，找到時自動加上 `--vad` | `WHISPER_VAD_MODEL_PATH` |
 
@@ -59,7 +63,7 @@ cmake -B build && cmake --build build -j --config Release
 - 伺服器意外結束時會自動重啟；60 秒內連續當掉超過 3 次則停止，原因記在記錄檔
 - **位址上已有伺服器在執行時，app 會直接使用它，結束時也不會關閉它**
 
-也可以自己啟動伺服器，例如使用其他模型：
+自己編譯的 whisper.cpp 仍可作為後備程式，或以 `WHISPER_SERVER_BIN` 指定。也可以自己啟動已編譯的伺服器，例如使用其他模型：
 
 ```bash
 cd ~/whisper.cpp
@@ -201,7 +205,7 @@ pnpm db:generate    # 修改 src/main/db/schema.ts 後產生 migration
 pnpm test           # 單元測試（純 Node）
 pnpm test:integration  # 整合測試（在真正的 Electron 主程序中執行）
 pnpm package        # 打包
-pnpm verify:package # 檢查打包結果（migration、原生模組、簽章）
+pnpm verify:package # 檢查打包結果（migration、原生模組、內建伺服器、簽章）
 pnpm make           # 建置安裝檔
 ```
 
@@ -217,9 +221,17 @@ pnpm make           # 建置安裝檔
 
 每個 PR 與推送到 `main` 時，GitHub Actions 會在 macOS 上依序執行：型別檢查、lint、單元測試、整合測試、打包、打包檢查（`.github/workflows/ci.yml`）。
 
+### 內建 whisper-server 的建置
+
+`pnpm start` 和 `pnpm package` 在 darwin arm64 上會先執行 `scripts/build-whisper-server.sh`；其他平台會顯示略過訊息。腳本固定使用 whisper.cpp **v1.9.5**，並檢查 tag 對應 commit `d1be6fde11ac6e0407606b4e42fe72d34add8037`。它以 `BUILD_SHARED_LIBS=OFF`、`GGML_NATIVE=OFF`、`GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16`、`GGML_METAL_EMBED_LIBRARY=ON` 與 Accelerate BLAS 建置，適用 M1 及後續 Apple Silicon，Metal 程式庫嵌入單一執行檔，僅連結系統函式庫。Accelerate 的 `cblas_sgemm` 需要 macOS 13.3，因此 app 與伺服器最低版本均為 13.3。
+
+首次建置需要 CMake（例如 `brew install cmake`）與 Xcode Command Line Tools。原始碼和建置快取位於 `node_modules/.cache/whisper.cpp`，產物為 `resources/bin/whisper-server` 與 `whisper-server.version`；版本戳記符合時會跳過重建。CI 依建置腳本的雜湊快取這兩個目錄，並在打包前明確執行腳本。打包時兩個產物會放進 `Contents/Resources/`；開發模式則從專案的 `resources/bin/` 尋找。
+
+`pnpm verify:package` 會檢查內建程式的執行權限、arm64 架構、系統連結、最低 macOS 版本、獨立簽章與 app 簽署身分是否相符，並在 10 秒內執行 `--help`，最後顯示版本戳記。
+
 ### 打包與簽章
 
-打包後會重新簽章 `.app`，讓簽章識別碼與 bundle ID（`com.electron.open-typeless`）一致，否則 macOS 不會跳出麥克風授權。簽章身分依序選用：
+打包後會先用相同身分簽章 `Contents/Resources/whisper-server`，再重新簽章 `.app`，讓簽章識別碼與 bundle ID（`com.electron.open-typeless`）一致，否則 macOS 不會跳出麥克風授權。簽章身分依序選用：
 
 1. 環境變數 `CODESIGN_IDENTITY`
 2. 鑰匙圈中名為 `Open Typeless Dev` 的程式碼簽署憑證
@@ -251,7 +263,8 @@ ad-hoc 簽章在每次重新打包後都會改變，macOS 會再次詢問麥克�
 
 app 沒能啟動或連上 whisper.cpp 伺服器。請查看記錄檔 `~/Library/Logs/open-typeless/main.log` 中 `whisper-server` 開頭的訊息：
 
-- `whisper-server binary not found` 或 `no ggml model found`：依照「準備 whisper.cpp」編譯並下載模型，或用環境變數指定路徑
+- `no ggml model found`：下載模型，放入 app 的模型資料夾並在設定中選取，或用 `WHISPER_MODEL_PATH` 指定路徑
+- `whisper-server binary not found`：打包版應包含內建程式；開發模式可執行 `bash scripts/build-whisper-server.sh`，或用 `WHISPER_SERVER_BIN` 指定自己的程式
 - `exited before becoming ready` 或 `exceeded 3 unexpected exits`：伺服器啟動失敗，記錄檔會附上它最後的輸出
 - 位址不是本機時，app 不會自動啟動伺服器，請確認該伺服器正在執行
 

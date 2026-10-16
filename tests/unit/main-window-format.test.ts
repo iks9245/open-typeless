@@ -1,6 +1,7 @@
 import { getDefaultSettings } from '../../src/main/services/settings/types';
 import { describe, expect, it } from 'vitest';
-import { formatModelSize, modelLockReason, formatReportDuration, formatReportNumber, polishStyleModelHint, polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
+import { formatModelSize, modelLockReason, formatReportDuration, formatReportNumber, polishStyleModelHint, polishModelOptions, polishReasonLabel, errorCodeLabel, errorMessage, formatDuration, formatHistoryTime, insertStatusLabel, serverBinaryLabel, serverModeLabel, serverStateLabel, statusLabel } from '../../src/renderer/src/modules/main-window/lib/format';
+import type { WhisperServerInfo } from '../../src/shared/types/whisper-server';
 
 describe('history time formatting', () => {
   const now = new Date(2026, 9, 15, 12, 0);
@@ -59,6 +60,15 @@ describe('Traditional Chinese history labels', () => {
 });
 
 describe('server labels and unexpected errors', () => {
+  it.each(['env', 'bundled', 'whisper.cpp', 'homebrew', 'system', null] as const)('labels binary source %s next to its name', binarySource => {
+    const status: WhisperServerInfo = {
+      mode: 'managed', state: 'ready', binaryName: 'whisper-server', binarySource,
+      modelName: null, vadModelName: null, modelId: null, modelFallback: false, modelLocked: null, reason: null,
+    };
+    expect(serverBinaryLabel(status)).toBe(binarySource === 'bundled' ? 'whisper-server（內建）' : 'whisper-server');
+    expect(serverBinaryLabel({ ...status, binaryName: null })).toBeNull();
+  });
+
   it('covers every mode and lifecycle state', () => {
     const modes = ['managed', 'adopted', 'external', 'unavailable', 'none'] as const;
     const states = ['idle', 'starting', 'ready', 'stopped', 'failed'] as const;

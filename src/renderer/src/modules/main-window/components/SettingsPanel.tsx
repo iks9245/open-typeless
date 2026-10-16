@@ -9,7 +9,7 @@ import { usePolishStatus } from '../hooks/usePolishStatus';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useMounted } from '../hooks/useMounted';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
-import { formatModelSize, modelLockReason, polishStyleModelHint, polishModelOptions, polishReasonLabel, serverModeLabel, serverStateLabel } from '../lib/format';
+import { formatModelSize, modelLockReason, polishStyleModelHint, polishModelOptions, polishReasonLabel, serverBinaryLabel, serverModeLabel, serverStateLabel } from '../lib/format';
 
 function SettingRow({ title, detail, children }: { title: string; detail?: string; children: ReactNode }) {
   return <div className="setting-row"><div><span className="setting-title">{title}</span>{detail && <p className="muted help">{detail}</p>}</div>{children}</div>;
@@ -128,7 +128,7 @@ export function SettingsPanel({ active }: { active: boolean }) {
             {server.status && <dl className="server-details">
               <div><dt>模型</dt><dd>{server.status.modelName ?? '未提供'}</dd></div>
               {server.status.vadModelName && <div><dt>語音活動偵測模型</dt><dd>{server.status.vadModelName}</dd></div>}
-              {server.status.binaryName && <div><dt>伺服器程式</dt><dd>{server.status.binaryName}</dd></div>}
+              {server.status.binaryName && <div><dt>伺服器程式</dt><dd>{serverBinaryLabel(server.status)}</dd></div>}
               {server.status.reason && <div><dt>原因</dt><dd>{server.status.reason}</dd></div>}
             </dl>}
           </div>

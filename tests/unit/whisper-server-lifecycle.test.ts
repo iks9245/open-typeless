@@ -48,6 +48,7 @@ describe('WhisperServerService lifecycle', () => {
       timers: { setTimeout, clearTimeout },
       now: Date.now,
       discovery: {
+        bundledBinary: () => null,
         userData: () => dir,
         statFile: file => statSync(file),
         readHeader: file => readFileSync(file).subarray(0, 4),
@@ -103,7 +104,7 @@ describe('WhisperServerService lifecycle', () => {
     await service.start();
 
     const status = service.status();
-    expect(status).toMatchObject({ mode: 'managed', state: 'ready', binary: FIXTURE, vadModel: null });
+    expect(status).toMatchObject({ mode: 'managed', state: 'ready', binary: FIXTURE, binarySource: 'env', vadModel: null });
     const pid = status.pid as number;
     expect(alive(pid)).toBe(true);
 

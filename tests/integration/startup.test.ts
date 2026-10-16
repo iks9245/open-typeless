@@ -39,7 +39,7 @@ run(async () => {
 
   await test('a normal start creates the database in userData', () => {
     assert(db.initDatabase(undefined, drizzle), 'init succeeds');
-    assert(existsSync(path.join(TMP_DIR, 'userData', 'open-typeless.db')), 'database file created');
+    assert(existsSync(path.join(TMP_DIR, 'userData', 'waae.db')), 'database file created');
   });
 
   await test('a session cut off by a crash is marked interrupted on the next launch', () => {

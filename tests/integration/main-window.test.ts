@@ -396,7 +396,7 @@ run(async () => {
     await ui.click('tab-settings');
     await ui.waitFor('about-versions');
     const versions = await ui.text('about-versions');
-    for (const label of ['Open Typeless', app.getVersion(), 'whisper.cpp', 'Electron', process.versions.electron, 'macOS', '晶片', '記憶體']) {
+    for (const label of ['WaaE', app.getVersion(), 'whisper.cpp', 'Electron', process.versions.electron, 'macOS', '晶片', '記憶體']) {
       assert(versions.includes(label), `version list contains ${label}`, versions);
     }
     assert(await ui.count('about-feedback') === 0, 'unset feedback button hidden');
@@ -412,7 +412,7 @@ run(async () => {
     }
     assert(await ui.exec<boolean>('document.hasFocus()'), 'version copy has document focus');
     await ui.click('about-copy');
-    await until('version clipboard', () => clipboard.readText().startsWith(`Open Typeless: ${app.getVersion()}`));
+    await until('version clipboard', () => clipboard.readText().startsWith(`WaaE: ${app.getVersion()}`));
     assert(clipboard.readText().includes(`Electron: ${process.versions.electron}`), 'clipboard contains versions');
     await ui.waitUntil('copy confirmation', `document.querySelector('[data-testid="about-copy"]').textContent === '已複製'`);
     ui.window.hide();

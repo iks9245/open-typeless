@@ -20,7 +20,7 @@ export function createWindow(isQuitting: () => boolean, show = true): BrowserWin
     height: 680,
     minWidth: 720,
     minHeight: 520,
-    title: 'Open Typeless',
+    title: 'WaaE',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

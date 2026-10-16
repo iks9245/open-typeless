@@ -11,7 +11,7 @@ import { OnboardingModelStep } from './OnboardingModelStep';
 import { OnboardingAiStep } from './OnboardingAiStep';
 
 const TITLES: Record<OnboardingStep, string> = {
-  welcome: '歡迎使用 Open Typeless', model: '準備辨識模型', microphone: '允許使用麥克風',
+  welcome: '歡迎使用 WaaE', model: '準備辨識模型', microphone: '允許使用麥克風',
   accessibility: '開啟輔助使用權限', try: '試著說一句話', ai: '啟用 AI 功能（選用）', done: '準備好了！',
 };
 const LANGUAGES: { id: PrimaryLanguage; label: string }[] = [
@@ -86,10 +86,11 @@ export function OnboardingWizard() {
   const unavailableMicrophone = permissions.status?.microphone !== 'granted';
 
   return <div className="main-window onboarding" data-testid="onboarding-wizard">
-    <header className="app-header"><div className="brand"><span className="brand-mark" aria-hidden="true">⌥</span><strong>Open Typeless</strong></div>
+    <header className="app-header"><div className="brand"><span className="brand-mark" aria-hidden="true">⌥</span><strong>WaaE</strong></div>
       <p data-testid="onboarding-progress" role="status" aria-live="polite" aria-atomic="true">第 {index + 1}／7 步</p>
     </header>
     <main><section className="onboarding-content" aria-labelledby="onboarding-heading">
+      {settings?.onboarding.migratedFromLegacy && <p className="notice" role="status" data-testid="onboarding-migration-notice">WaaE 是 open-typeless 的新名稱，資料已經搬過來；macOS 需要重新授權一次。</p>}
       <h1 id="onboarding-heading" data-testid={`onboarding-step-${step}`} tabIndex={-1} ref={heading}>{TITLES[step]}</h1>
       {step === 'welcome' && <>
         <p>按住一個鍵，說話就能變成文字，輸入到你正在使用的 app。</p>
@@ -112,11 +113,11 @@ export function OnboardingWizard() {
         {permissions.error && <p className="error-text" role="alert">{permissions.error}</p>}
         {step === 'accessibility' && <ol>
           <li>打開「系統設定」→「隱私權與安全性」→「輔助使用」。</li>
-          <li>開啟 Open Typeless 的開關。</li>
+          <li>開啟 WaaE 的開關。</li>
           <li>回到這裡，允許後會自動繼續，不需重新啟動。</li>
         </ol>}
         {step === 'microphone' && ['denied', 'restricted', 'unknown'].includes(permissions.status?.microphone ?? '') &&
-          <p>麥克風權限尚未允許，請到「隱私權與安全性」→「麥克風」開啟 Open Typeless。</p>}
+          <p>麥克風權限尚未允許，請到「隱私權與安全性」→「麥克風」開啟 WaaE。</p>}
         <div className="onboarding-actions">
           <button className="primary" data-testid="onboarding-permission-request" disabled={saving || permissions.pending || !permissions.status || Boolean(granted)}
             onClick={() => { void permissions.request(step === 'microphone' ? 'microphone' : 'accessibility', step === 'accessibility' || permissions.status?.microphone !== 'not-determined'); }}>
@@ -154,10 +155,10 @@ export function OnboardingWizard() {
         {login.state?.supported && <div className="card"><label className="setting-row"><span>開機時自動啟動</span>
           <input type="checkbox" role="switch" data-testid="onboarding-login-item" checked={login.state.enabled} disabled={login.pending}
             onChange={event => { void login.setEnabled(event.target.checked); }} /></label>
-          {login.state.requiresApproval && <p className="muted help">請在系統設定的「登入項目」允許 Open Typeless。</p>}
+          {login.state.requiresApproval && <p className="muted help">請在系統設定的「登入項目」允許 WaaE。</p>}
         </div>}
         <div className="onboarding-actions"><button className="primary" data-testid="onboarding-finish" disabled={saving || login.pending}
-          onClick={() => { void update({ onboarding: { completed: true, step: null } }); }}>開始使用</button></div>
+          onClick={() => { void update({ onboarding: { completed: true, step: null, migratedFromLegacy: false } }); }}>開始使用</button></div>
       </>}
     </section></main>
     <footer className="app-footer">

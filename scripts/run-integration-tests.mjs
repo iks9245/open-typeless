@@ -66,7 +66,7 @@ if (files.some((name) => name.startsWith('main-window'))) {
 const run = (bundle, tmp, file) => new Promise((resolve) => {
   const child = spawn(electron, [bundle], {
     cwd: root,
-    env: { ...process.env, ...uiEnv, INTEGRATION_TMP: tmp, OMLX_SETTINGS_PATH: path.join(tmp, 'omlx', 'settings.json'), OPEN_TYPELESS_MODEL_CATALOG: ['main-window-model-download', 'main-window-onboarding'].some(prefix => file.startsWith(prefix)) ? path.join(tmp, 'model-catalog.json') : '', ELECTRON_ENABLE_LOGGING: '0' },
+    env: { ...process.env, ...uiEnv, INTEGRATION_TMP: tmp, OMLX_SETTINGS_PATH: path.join(tmp, 'omlx', 'settings.json'), WAAE_MODEL_CATALOG: ['main-window-model-download', 'main-window-onboarding'].some(prefix => file.startsWith(prefix)) ? path.join(tmp, 'model-catalog.json') : '', ELECTRON_ENABLE_LOGGING: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
@@ -95,7 +95,7 @@ for (const file of files) {
     logLevel: 'warning',
   });
 
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'open-typeless-it-'));
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'waae-it-'));
   const started = Date.now();
   const { code, signal, output } = await run(bundle, tmp, file);
   rmSync(tmp, { recursive: true, force: true });

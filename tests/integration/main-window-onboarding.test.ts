@@ -33,7 +33,7 @@ run(async () => {
     sha256: createHash('sha256').update(content).digest('hex'),
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/${entry.key}`,
   }));
-  const override = process.env.OPEN_TYPELESS_MODEL_CATALOG;
+  const override = process.env.WAAE_MODEL_CATALOG;
   assert(override, 'runner supplies an isolated fake catalog');
   await writeFile(override, JSON.stringify(catalog));
   await writeOmlxSettings(null, null);
@@ -204,6 +204,23 @@ run(async () => {
         await writeOmlxSettings(null, null);
         await omlx.close();
       }
+    });
+    await test('migrated users see the permission notice until the wizard is finished', async () => {
+      await ui.click('onboarding-finish');
+      await ui.waitFor('tab-history');
+      permissionsService.getMicrophoneStatus = () => 'denied';
+      permissionsService.getAccessibilityStatus = () => false;
+      const result = settingsService.update({ onboarding: { completed: false, step: 'microphone', migratedFromLegacy: true } });
+      assert(result.success, 'migration flags persisted');
+      await step('microphone');
+      assert((await ui.text('onboarding-migration-notice')) === 'WaaE 是 open-typeless 的新名稱，資料已經搬過來；macOS 需要重新授權一次。', 'migration explanation');
+      await reload('microphone');
+      await ui.waitFor('onboarding-migration-notice');
+      assert(settingsService.update({ onboarding: { step: 'done' } }).success, 'advance to final step');
+      await step('done');
+      await ui.click('onboarding-finish');
+      await ui.waitFor('tab-history');
+      assert(!settings().onboarding.migratedFromLegacy, 'migration notice cleared at completion');
     });
   } finally {
     nativeTheme.themeSource = 'system';

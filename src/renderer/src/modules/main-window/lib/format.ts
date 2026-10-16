@@ -117,7 +117,7 @@ export function formatReportDuration(milliseconds: number | null): string {
 /** Shared by the on-screen version list and the plain-text clipboard block. */
 export function versionEntries(summary: DiagnosticsSummary): [string, string][] {
   return [
-    ['Open Typeless', summary.app.version],
+    ['WaaE', summary.app.version],
     ['whisper.cpp', summary.app.whisperCpp ?? '未內建'],
     ['Electron', summary.app.electron],
     ['macOS', `${summary.system.version}（Darwin ${summary.system.release}）`],

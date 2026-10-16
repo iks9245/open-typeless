@@ -106,7 +106,7 @@ describe('diagnostics collection', () => {
   });
 
   it('formats a plain-text version block without HTML', () => {
-    expect(formatVersionInfo(summary)).toBe('Open Typeless: 1.2.3\nwhisper.cpp: whisper.cpp v1.9.5 (stamp)\nElectron: 40.1.0\nmacOS: 26.0（Darwin 25.0.0）\n晶片: Apple M4\n記憶體: 32.0 GB');
+    expect(formatVersionInfo(summary)).toBe('WaaE: 1.2.3\nwhisper.cpp: whisper.cpp v1.9.5 (stamp)\nElectron: 40.1.0\nmacOS: 26.0（Darwin 25.0.0）\n晶片: Apple M4\n記憶體: 32.0 GB');
   });
 });
 
@@ -161,7 +161,7 @@ describe('redaction and archive', () => {
     const zip = path.join(directory, 'support.zip');
     expect(await service.export(zip)).toBe(zip);
     expect(existsSync(zip)).toBe(true);
-    expect(readdirSync(directory).some(name => name.startsWith('open-typeless-diagnostics-'))).toBe(false);
+    expect(readdirSync(directory).some(name => name.startsWith('waae-diagnostics-'))).toBe(false);
     const extracted = path.join(directory, 'extracted');
     await promisify(execFile)('/usr/bin/ditto', ['-x', '-k', zip, extracted]);
     // The archive's folder carries the zip name rather than the random staging name

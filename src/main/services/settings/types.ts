@@ -25,6 +25,7 @@ export interface SettingsService {
 }
 
 const onboardingSchema = z.object({
+  migratedFromLegacy: z.boolean(),
   completed: z.boolean(),
   step: z.enum(ONBOARDING_STEPS).nullable(),
   primaryLanguage: z.enum(['yue', 'zh', 'en', 'other']).nullable(),
@@ -86,6 +87,7 @@ export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
 export const emptySettingsInputSchema = z.object({}).strict();
 
 export const settingSchemas = {
+  'onboarding.migratedFromLegacy': onboardingSchema.shape.migratedFromLegacy,
   'onboarding.completed': onboardingSchema.shape.completed,
   'onboarding.step': onboardingSchema.shape.step,
   'onboarding.primaryLanguage': onboardingSchema.shape.primaryLanguage,
@@ -115,6 +117,7 @@ export function isSettingKey(key: string): key is SettingKey {
 export function applySetting(target: AppSettings, key: SettingKey, value: unknown): void {
   // Values have already been checked with the matching dotted-key schema.
   switch (key) {
+    case 'onboarding.migratedFromLegacy': target.onboarding.migratedFromLegacy = value as boolean; break;
     case 'onboarding.completed': target.onboarding.completed = value as boolean; break;
     case 'onboarding.step': target.onboarding.step = value as AppSettings['onboarding']['step']; break;
     case 'onboarding.primaryLanguage': target.onboarding.primaryLanguage = value as AppSettings['onboarding']['primaryLanguage']; break;
@@ -142,7 +145,7 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
     logger.warn('Ignoring invalid WHISPER_SERVER_URL', { error: url.error.issues[0].message });
   }
   return {
-    onboarding: { completed: false, step: null, primaryLanguage: null },
+    onboarding: { migratedFromLegacy: false, completed: false, step: null, primaryLanguage: null },
     memory: { enabled: true },
     history: { enabled: true, saveAudio: false, retentionDays: null },
     asr: {

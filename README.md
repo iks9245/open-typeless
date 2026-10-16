@@ -1,4 +1,4 @@
-# Open Typeless
+# WaaE
 
 > **This project is a showcase for the [Trellis](https://github.com/mindfold-ai/Trellis) framework.**
 >
@@ -74,7 +74,7 @@ cd ~/whisper.cpp
 
 ### 辨識模型選擇
 
-在「設定 → 語音辨識 → 辨識模型」選擇模型；預設「自動」維持原有的優先順序（large-v3-turbo → large-v3 → medium → small → base）。清單會掃描 app 的 `<userData>/models`（macOS 通常為 `~/Library/Application Support/open-typeless/models`）和 `~/whisper.cpp/models`，只列出具有 ggml 標頭的 `.bin` 模型，不含測試或 Silero VAD 模型。按「打開模型資料夾」會建立並開啟 app 的模型資料夾，把下載好的模型放進去即可，清單會自動更新。
+在「設定 → 語音辨識 → 辨識模型」選擇模型；預設「自動」維持原有的優先順序（large-v3-turbo → large-v3 → medium → small → base）。清單會掃描 app 的 `<userData>/models`（macOS 通常為 `~/Library/Application Support/WaaE/models`）和 `~/whisper.cpp/models`，只列出具有 ggml 標頭的 `.bin` 模型，不含測試或 Silero VAD 模型。按「打開模型資料夾」會建立並開啟 app 的模型資料夾，把下載好的模型放進去即可，清單會自動更新。
 
 切換模型時，由 app 管理或沿用的伺服器會重新啟動，狀態顯示「正在載入模型…」。找不到選擇的模型時會暫時回到自動選擇並顯示提示。`WHISPER_MODEL_PATH` 的優先權最高；若設了此環境變數，或連線的是外部伺服器，選單會停用並說明原因。
 
@@ -143,9 +143,9 @@ AI 潤稿預設關閉，可在「設定 → AI 潤稿」啟用。需要先在本
 
 | 內容 | 位置 |
 |---|---|
-| 資料庫 | `~/Library/Application Support/open-typeless/open-typeless.db` |
-| 錄音（預設不保存） | `~/Library/Application Support/open-typeless/audio/` |
-| 記錄檔 | `~/Library/Logs/open-typeless/main.log` |
+| 資料庫 | `~/Library/Application Support/WaaE/waae.db` |
+| 錄音（預設不保存） | `~/Library/Application Support/WaaE/audio/` |
+| 記錄檔 | `~/Library/Logs/WaaE/main.log` |
 
 每次聽寫會記錄成一筆 `transcriptions` 資料，狀態為 `completed`、`empty`（沒有辨識到文字）或 `failed`（附帶原因，例如 `start_failed`、`transcription_failed`）。若錄音途中 app 被強制結束，下次啟動時會自動標記為 `failed / interrupted`。
 
@@ -168,6 +168,14 @@ AI 潤稿預設關閉，可在「設定 → AI 潤稿」啟用。需要先在本
 可在主視窗查看歷史與調整設定；變更會儲存在本機資料庫。
 
 資料庫無法開啟時，app 仍可正常聽寫，只是不記錄歷史。
+
+### 從舊版搬移資料
+
+WaaE 的 bundle ID 是 `io.github.iks9245.waae`，打包結果為 `out/WaaE-darwin-arm64/WaaE.app`。首次啟動時，只有舊的 `~/Library/Application Support/open-typeless/open-typeless.db` 存在且新的 `WaaE/waae.db` 不存在，才會自動搬移。請先結束舊版 open-typeless；若它仍在執行，WaaE 會顯示提示並結束。
+
+搬移前會將 SQLite WAL 寫回資料庫，再搬移資料庫、剩餘 WAL/SHM、`models/`、`audio/` 與 `Local Storage/`。目標資料夾已存在時會略過並記錄；跨磁碟搬移會先複製並確認大小，再移除來源。舊資料夾會留下 `MOVED-TO-WaaE.txt` 說明新位置。遇到錯誤會停止搬移並保留剩餘舊資料，app 仍會繼續啟動；可由記錄檔確認哪些項目已搬移。`whisper-server.pid`、Chromium 快取和舊記錄檔不會搬移，新記錄檔寫入 `~/Library/Logs/WaaE/`。
+
+macOS 會將新的 bundle ID 視為另一個 app，因此需要重新授予麥克風與輔助使用權限。已完成設定的舊使用者會從精靈的麥克風步驟重新開始，其餘設定保持原值；精靈完成後會清除搬移提示。
 
 ## 專案結構
 
@@ -231,20 +239,25 @@ pnpm make           # 建置安裝檔
 
 ### 打包與簽章
 
-打包後會先用相同身分簽章 `Contents/Resources/whisper-server`，再重新簽章 `.app`，讓簽章識別碼與 bundle ID（`com.electron.open-typeless`）一致，否則 macOS 不會跳出麥克風授權。簽章身分依序選用：
+打包後會先用相同身分簽章 `Contents/Resources/whisper-server`，再重新簽章 `.app`，讓簽章識別碼與 bundle ID（`io.github.iks9245.waae`）一致，否則 macOS 不會跳出麥克風授權。簽章身分依序選用：
 
 1. 環境變數 `CODESIGN_IDENTITY`
-2. 鑰匙圈中名為 `Open Typeless Dev` 的程式碼簽署憑證
-3. 都沒有時改用 ad-hoc 簽章（例如 CI）
+2. 鑰匙圈中名為 `WaaE Dev` 的程式碼簽署憑證
+3. 相容舊版：鑰匙圈中名為 `Open Typeless Dev` 的程式碼簽署憑證
+4. 都沒有時改用 ad-hoc 簽章（例如 CI）
 
 ad-hoc 簽章在每次重新打包後都會改變，macOS 會再次詢問麥克風與輔助使用權限。本機開發建議建立固定的自簽憑證：
 
 1. 打開「鑰匙圈存取」，選單選「憑證輔助程式 → 製作憑證⋯」。
-2. 名稱填 `Open Typeless Dev`，身分類型選「自簽根憑證」，憑證類型選「程式碼簽署」，按「製作」。
+2. 名稱填 `WaaE Dev`，身分類型選「自簽根憑證」，憑證類型選「程式碼簽署」，按「製作」。
 3. 第一次打包時，在鑰匙圈提示中輸入登入密碼並按「永遠允許」。
-4. 新簽章的 app 需要重新授權一次：在「系統設定 → 隱私權與安全性 → 輔助使用」移除舊的 open-typeless 後重新加入，並在啟動時允許麥克風。之後重新打包，權限都會保留。
+4. 新簽章的 app 需要重新授權一次：在「系統設定 → 隱私權與安全性 → 輔助使用」移除舊的 WaaE 後重新加入，並在啟動時允許麥克風。之後重新打包，權限都會保留。
 
 `pnpm verify:package` 會顯示這次的簽章方式。正式發佈前，需要在 `forge.config.ts` 的 `packagerConfig.osxSign` 設定 Apple Developer ID 憑證。
+
+### 圖示
+
+`assets/icon.svg` 是暫用的對話框 W 圖示，之後可由設計師替換。在 macOS 執行 `bash scripts/build-icon.sh`，以 `qlmanage`、`sips` 和 `iconutil` 產生 `assets/icon.icns`；打包直接使用已產生的圖示，CI 不必重建。受限環境若無法啟動 Quick Look，可用 `ICON_SOURCE_PNG=/path/to/1024.png` 提供 SVG 的 1024 px PNG；若 `iconutil` 也無法運作，可另外設定 `ICON_ALLOW_FALLBACK=1`，以 Python 3 將 PNG 尺寸組合成 ICNS。
 
 ## 技術架構
 
@@ -261,7 +274,7 @@ ad-hoc 簽章在每次重新打包後都會改變，macOS 會再次詢問麥克�
 
 ### Q：出現「Cannot reach whisper.cpp server」？
 
-app 沒能啟動或連上 whisper.cpp 伺服器。請查看記錄檔 `~/Library/Logs/open-typeless/main.log` 中 `whisper-server` 開頭的訊息：
+app 沒能啟動或連上 whisper.cpp 伺服器。請查看記錄檔 `~/Library/Logs/WaaE/main.log` 中 `whisper-server` 開頭的訊息：
 
 - `no ggml model found`：下載模型，放入 app 的模型資料夾並在設定中選取，或用 `WHISPER_MODEL_PATH` 指定路徑
 - `whisper-server binary not found`：打包版應包含內建程式；開發模式可執行 `bash scripts/build-whisper-server.sh`，或用 `WHISPER_SERVER_BIN` 指定自己的程式
@@ -275,7 +288,7 @@ app 沒能啟動或連上 whisper.cpp 伺服器。請查看記錄檔 `~/Library/
 這是 whisper 收到靜音時產生的幻覺文字。app 會先檢查音量，幾乎沒有聲音時不送出辨識；若仍經常出現，通常代表麥克風沒有錄到聲音：
 
 1. 確認 app 已取得麥克風權限（「系統設定」-「隱私權與安全性」-「麥克風」）
-2. 若打包版沒有出現在麥克風清單中，請重新執行 `pnpm package`，並確認簽章識別碼為 `com.electron.open-typeless`：`codesign -dv out/open-typeless-darwin-arm64/open-typeless.app`
+2. 若打包版沒有出現在麥克風清單中，請重新執行 `pnpm package`，並確認簽章識別碼為 `io.github.iks9245.waae`：`codesign -dv out/WaaE-darwin-arm64/WaaE.app`
 
 ### Q：中文被辨識成英文？
 
@@ -293,15 +306,15 @@ app 沒能啟動或連上 whisper.cpp 伺服器。請查看記錄檔 `~/Library/
 
 ### Q：專有名詞辨識不準？
 
-whisper 對產品名稱等專有名詞容易誤認，例如把 Typeless 辨識成 timeless。在設定 `asr.vocabulary` 加入常用詞彙後，每次辨識都會以一句提示送給 whisper，例如：
+whisper 對產品名稱等專有名詞容易誤認。在設定 `asr.vocabulary` 加入常用詞彙後，每次辨識都會以一句提示送給 whisper，例如：
 
 ```
-這段話可能會提到 Open Typeless、Trellis 和 whisper.cpp。
+這段話可能會提到 WaaE、Trellis 和 whisper.cpp。
 ```
 
 - 詞彙會去除重複，總長度超過約 150 字時，排在後面的詞彙不會送出
 - 有詞彙表時，辨識結果傾向使用**繁體中文**（whisper 會模仿提示句的寫法）
-- 以合成語音測試時，「Open Typeless」可被正確辨識；中文語音唸的英文縮寫（例如 REA）改善有限
+- 詞彙提示能改善產品名稱的辨識；中文語音唸的英文縮寫（例如 REA）改善有限
 
 目前還沒有設定介面，詞彙表會在之後的主視窗中提供編輯。
 
@@ -309,6 +322,10 @@ whisper 對產品名稱等專有名詞容易誤認，例如把 Typeless 辨識�
 
 目前快捷鍵固定為右 Option 鍵。如需自訂，可修改 `src/main/services/keyboard/keyboard.service.ts` 中的 `triggerKey` 設定。
 
+## 致謝
+
+本專案基於 taosu 的 open-typeless（MIT）發展而成。原專案由 taosu（mindfold.ai）發起，保留原作者署名。
+
 ## 授權條款
 
-MIT
+MIT（依 package.json 宣告；授權全文待與原作者確認）

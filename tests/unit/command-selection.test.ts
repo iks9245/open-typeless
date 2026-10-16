@@ -24,7 +24,7 @@ describe('selection capture', () => {
     deps.keyTap = vi.fn(() => copy('private selection'));
     expect(await captureSelection(deps)).toBe('private selection');
     expect(deps.waitForModifiersReleased).toHaveBeenCalledWith(1500);
-    expect(deps.clipboard.writeText).toHaveBeenCalledWith(expect.stringMatching(/^open-typeless-selection-/));
+    expect(deps.clipboard.writeText).toHaveBeenCalledWith(expect.stringMatching(/^waae-selection-/));
     expect(deps.clipboard.write).toHaveBeenCalledWith({ text: 'original', html: '<b>original</b>', rtf: '{rtf}', image });
   });
 

@@ -43,6 +43,7 @@ export function AboutSection({ active }: { active: boolean }) {
   return <section className="settings-section" aria-labelledby="about-heading">
     <h2 id="about-heading" data-testid="about-heading">關於與支援</h2>
     <div className="card about-card">
+      <p className="muted help">本專案基於 taosu 的 open-typeless（MIT）發展而成</p>
       {error && <p className="error-text" role="alert">{error}</p>}
       {summary ? <dl className="about-versions" data-testid="about-versions">
         {versionEntries(summary).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}

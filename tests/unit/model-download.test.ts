@@ -292,9 +292,9 @@ describe('catalog and deletion', () => {
 
   it('honors the override only when unpackaged and validates hosts and filenames', () => {
     const read = vi.fn(() => JSON.stringify([{ ...entry, url: 'http://127.0.0.1:1234/file' }]));
-    expect(loadModelCatalog(true, { OPEN_TYPELESS_MODEL_CATALOG: '/test/catalog' }, read)).toEqual(MODEL_CATALOG);
+    expect(loadModelCatalog(true, { WAAE_MODEL_CATALOG: '/test/catalog' }, read)).toEqual(MODEL_CATALOG);
     expect(read).not.toHaveBeenCalled();
-    expect(loadModelCatalog(false, { OPEN_TYPELESS_MODEL_CATALOG: '/test/catalog' }, read)[0].key).toBe(entry.key);
+    expect(loadModelCatalog(false, { WAAE_MODEL_CATALOG: '/test/catalog' }, read)[0].key).toBe(entry.key);
     for (const url of ['http://example.com/file', 'https://huggingface.co.evil/file', 'https://huggingface.co/file?secret=1']) {
       expect(() => validateCatalog([{ ...entry, url }], true)).toThrow();
     }

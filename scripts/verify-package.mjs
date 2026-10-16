@@ -24,12 +24,16 @@ const check = (ok, message) => {
   if (!ok) failures.push(message);
 };
 
-const buildDir = existsSync(outDir) ? readdirSync(outDir).find((name) => name.endsWith(`-darwin-${process.arch}`)) : undefined;
-if (!buildDir) {
+const buildDir = `WaaE-darwin-${process.arch}`;
+if (!existsSync(path.join(outDir, buildDir))) {
   console.error(`No darwin-${process.arch} build in out/; run pnpm package first`);
   process.exit(1);
 }
-const bundle = readdirSync(path.join(outDir, buildDir)).find((name) => name.endsWith('.app'));
+const bundle = 'WaaE.app';
+if (!existsSync(path.join(outDir, buildDir, bundle))) {
+  console.error('WaaE.app is missing; run pnpm package first');
+  process.exit(1);
+}
 const app = path.join(outDir, buildDir, bundle);
 const resources = path.join(app, 'Contents', 'Resources');
 console.log(`Checking ${path.relative(root, app)}`);
@@ -61,6 +65,15 @@ check(existsSync(path.join(resources, 'app.asar.unpacked', 'node_modules', 'bett
 
 const plist = path.join(app, 'Contents', 'Info.plist');
 const bundleId = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', plist]).toString().trim();
+check(bundleId === 'io.github.iks9245.waae', 'CFBundleIdentifier is io.github.iks9245.waae');
+const bundleName = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleName', plist]).toString().trim();
+check(bundleName === 'WaaE', 'CFBundleName is WaaE');
+const icon = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', plist], { encoding: 'utf8' });
+const iconName = icon.stdout?.trim();
+check(icon.status === 0 && Boolean(iconName) && [iconName, `${iconName}.icns`].some(name => {
+  const file = path.join(resources, name);
+  return existsSync(file) && statSync(file).isFile();
+}), 'CFBundleIconFile names an icon present in Resources');
 const minimumSystemVersion = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :LSMinimumSystemVersion', plist], { encoding: 'utf8' });
 check(minimumSystemVersion.status === 0 && minimumSystemVersion.stdout.trim() === '13.3', 'Info.plist requires macOS 13.3');
 // codesign -dv prints its details on stderr

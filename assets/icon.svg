@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#064e56"/>
+      <stop offset="1" stop-color="#1765b4"/>
+    </linearGradient>
+  </defs>
+  <rect x="102" y="102" width="820" height="820" rx="184" fill="url(#background)"/>
+  <path d="M326 290h372a92 92 0 0 1 92 92v210a92 92 0 0 1-92 92H482L336 780V684h-10a92 92 0 0 1-92-92V382a92 92 0 0 1 92-92Z" fill="#fff"/>
+  <!-- An outlined W avoids font dependencies when Quick Look rasterizes the SVG. -->
+  <path d="m328 390 58 202h65l61-118 61 118h65l58-202h-69l-30 124-59-124h-52l-59 124-30-124Z" fill="#075566"/>
+</svg>

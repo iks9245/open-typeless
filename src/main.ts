@@ -1,3 +1,4 @@
+import { stopModelDownload } from './main/services/model-download';
 import 'dotenv/config';
 import { memoryIndexer } from './main/services/memory';
 import { app, session } from 'electron';
@@ -90,6 +91,7 @@ function cleanup(): void {
   polishService.dispose();
   floatingWindow.destroy();
   // Sends SIGTERM synchronously, only to a server this app started or adopted
+  stopModelDownload();
   void whisperServerService.stop();
   // Idempotent; an unfinished session is marked interrupted on next launch
   closeDatabase();

@@ -12,7 +12,7 @@ export interface WhisperModelDependencies {
 
 export const WHISPER_MODEL_ID_PATTERN = /^(app|whisper\.cpp)\/[^/\\]+\.bin$/;
 
-export function modelDirectory(source: WhisperModelInfo['source'], deps: WhisperModelDependencies): string {
+export function modelDirectory(source: WhisperModelInfo['source'], deps: Pick<WhisperModelDependencies, 'userData' | 'homedir'>): string {
   return source === 'app' ? path.join(deps.userData(), 'models') : path.join(deps.homedir(), 'whisper.cpp', 'models');
 }
 

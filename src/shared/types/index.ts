@@ -24,3 +24,5 @@ export type {
 export type { ReportRange, ReportInput, ReportTotals, FillerCount, WordCount, SpeechReport, ReportComment } from './report';
 
 export type { AskResult, AskSource, AskEntry, MemoryStatus } from './memory';
+
+export type { ModelCatalogEntry, ModelCatalogState, ModelDownloadProgress } from './model-download';

@@ -1,3 +1,4 @@
+import type { ModelCatalogState, ModelDownloadProgress } from '../shared/types/model-download';
 import type { AskResult, AskEntry, MemoryStatus } from '../shared/types/memory';
 /**
  * Global type declarations for the Electron application.
@@ -147,6 +148,14 @@ export interface AppApi {
   asr: ASRApi;
   history: HistoryApi;
   settings: SettingsApi;
+  models: {
+    catalog: () => Promise<IpcResult<ModelCatalogState[]>>;
+    start: (key: string) => Promise<IpcResult<void>>;
+    cancel: () => Promise<IpcResult<void>>;
+    discard: (key: string) => Promise<IpcResult<void>>;
+    delete: (modelId: string) => Promise<IpcResult<void>>;
+    onProgress: (callback: (progress: ModelDownloadProgress) => void) => () => void;
+  };
   whisperServer: WhisperServerApi;
   report: {
     get: (input: ReportInput) => Promise<IpcResult<SpeechReport>>;

@@ -11,7 +11,9 @@ import { loginItemService } from './main/services/login-item';
 import { installPermissionHandlers } from './main/security/permissions';
 import { floatingWindow } from './main/windows';
 import { pushToTalkService } from './main/services';
-import { closeDatabase, initDatabase } from './main/db';
+import { migrateExistingUser } from './main/services/onboarding';
+import { settingsService } from './main/services/settings';
+import { closeDatabase, getDb, initDatabase } from './main/db';
 import { historyService } from './main/services/history';
 import { polishService } from './main/services/polish';
 import { whisperServerService } from './main/services/whisper-server';
@@ -44,6 +46,8 @@ const initStorage = (): void => {
     return;
   }
 
+  migrateExistingUser(getDb());
+
   // Sessions cut off by a crash or forced quit become failed/interrupted
   const recovered = historyService.recover();
   if (recovered > 0) {
@@ -70,7 +74,9 @@ app.on('ready', () => {
   // settings, so storage comes first. Never rejects; failures are logged.
   void whisperServerService.start();
   polishService.startWarmups();
-  mainWindow = createWindow(() => isQuitting, !loginItemService.wasOpenedAtLogin());
+  const settings = settingsService.get();
+  const needsOnboarding = settings.success === false || !settings.data.onboarding.completed;
+  mainWindow = createWindow(() => isQuitting, needsOnboarding || !loginItemService.wasOpenedAtLogin());
   floatingWindow.create();
   pushToTalkService.initialize();
 });

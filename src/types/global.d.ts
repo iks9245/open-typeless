@@ -6,7 +6,7 @@ import type { AskResult, AskEntry, MemoryStatus } from '../shared/types/memory';
  */
 
 import type { ReportInput, SpeechReport } from '../shared/types/report';
-import type { LoginItemState } from '../shared/types/system';
+import type { LoginItemState, SystemInfo, PermissionsStatus, OnboardingPermission } from '../shared/types/system';
 import type { InputMode } from '../shared/constants/command';
 import type { ASRResult, ASRStatus } from '../shared/types/asr';
 import type { IpcResult } from '../shared/types/common';
@@ -141,7 +141,13 @@ export interface AppApi {
     history: () => Promise<IpcResult<AskEntry[]>>;
     onAnswered: (callback: (entry: AskEntry) => void) => () => void;
   };
+  permissions: {
+    status: () => Promise<IpcResult<PermissionsStatus>>;
+    requestMicrophone: () => Promise<IpcResult<boolean>>;
+    openSettings: (type: OnboardingPermission) => Promise<IpcResult<void>>;
+  };
   system: {
+    info: () => Promise<IpcResult<SystemInfo>>;
     getLoginItem: () => Promise<IpcResult<LoginItemState>>;
     setLoginItem: (enabled: boolean) => Promise<IpcResult<LoginItemState>>;
   };

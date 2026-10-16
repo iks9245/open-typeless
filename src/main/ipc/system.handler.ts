@@ -1,9 +1,10 @@
+import { totalmem } from 'node:os';
 import { ipcMain } from 'electron';
 import log from 'electron-log';
 import { z } from 'zod';
 import { IPC_CHANNELS } from '../../shared/constants/channels';
 import type { IpcResult } from '../../shared/types/common';
-import type { LoginItemState } from '../../shared/types/system';
+import type { LoginItemState, SystemInfo } from '../../shared/types/system';
 import { loginItemService } from '../services/login-item';
 import { isTrustedSender } from './sender';
 
@@ -30,6 +31,15 @@ export function setupSystemHandlers(): void {
       return { success: true, data: loginItemService.set(parsed.data) };
     } catch (error) {
       logger.error('Failed to set login item', { error });
+      return { success: false, error: 'Internal error' };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.SYSTEM.INFO, (event): IpcResult<SystemInfo> => {
+    try {
+      if (!isTrustedSender(event, 'main')) return { success: false, error: 'Untrusted sender' };
+      return { success: true, data: { totalMemoryGb: totalmem() / 1024 ** 3 } };
+    } catch (error) {
+      logger.error('Failed to read system info', { error });
       return { success: false, error: 'Internal error' };
     }
   });

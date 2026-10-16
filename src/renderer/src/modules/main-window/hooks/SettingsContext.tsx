@@ -78,6 +78,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     report('儲存中…');
     setSettings({
       ...previous,
+      // Step transitions become visible only after storage confirms the write.
+      onboarding: previous.onboarding,
+      memory: { ...previous.memory, ...patch.memory },
       asr: { ...previous.asr, ...patch.asr },
       history: { ...previous.history, ...patch.history },
       input: { ...previous.input, ...patch.input },

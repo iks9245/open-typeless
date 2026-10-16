@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   set: vi.fn(),
 }));
+vi.mock('node:os', () => ({ totalmem: () => 32 * 1024 ** 3 }));
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle } }));
 vi.mock('../../src/main/services/login-item', () => ({ loginItemService: { get: mocks.get, set: mocks.set } }));
 import { setupSystemHandlers } from '../../src/main/ipc/system.handler';
@@ -32,10 +33,14 @@ function mainEvent() {
 }
 
 describe('system login-item IPC', () => {
-  it('registers both channels once', () => {
-    expect([...handlers.keys()]).toEqual([IPC_CHANNELS.SYSTEM.GET_LOGIN_ITEM, IPC_CHANNELS.SYSTEM.SET_LOGIN_ITEM]);
+  it('registers system channels once', () => {
+    expect([...handlers.keys()]).toEqual([IPC_CHANNELS.SYSTEM.GET_LOGIN_ITEM, IPC_CHANNELS.SYSTEM.SET_LOGIN_ITEM, IPC_CHANNELS.SYSTEM.INFO]);
     setupSystemHandlers();
     expect(mocks.handle).not.toHaveBeenCalled();
+  });
+
+  it('returns total system memory in GB', () => {
+    expect(invoke(IPC_CHANNELS.SYSTEM.INFO, mainEvent())).toEqual({ success: true, data: { totalMemoryGb: 32 } });
   });
 
   it('returns OS state and passes validated booleans to the service', () => {

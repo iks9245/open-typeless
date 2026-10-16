@@ -21,6 +21,7 @@ describe('settings', () => {
   it('uses environment defaults without storing them', () => {
     const defaults = getDefaultSettings(env);
     expect(defaults).toEqual({
+      onboarding: { completed: false, step: null, primaryLanguage: null },
       memory: { enabled: true },
       history: { enabled: true, saveAudio: false, retentionDays: null },
       asr: { model: null, language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },
@@ -51,8 +52,8 @@ describe('settings', () => {
       polish: { enabled: true, model: 'custom-model', style: 'auto' },
       command: { enabled: false, model: 'custom-command' },
     };
-    expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: patch });
-    expect(getSettings(connection.db, env)).toEqual({ success: true, data: patch });
+    expect(updateSettings(connection.db, patch, now, env)).toEqual({ success: true, data: { ...getDefaultSettings(env), ...patch } });
+    expect(getSettings(connection.db, env)).toEqual({ success: true, data: { ...getDefaultSettings(env), ...patch } });
     expect(connection.db.select().from(settings).all()).toHaveLength(15);
     expect(connection.sqlite.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('asr.language'))
       .toEqual({ value: 'null', updated_at: now() });

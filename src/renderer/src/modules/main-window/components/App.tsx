@@ -1,3 +1,4 @@
+import { OnboardingWizard } from './OnboardingWizard';
 import { AskPanel } from './AskPanel';
 import { triggerKeyLabel } from '../../../../../shared/constants/keyboard';
 import { useRef, useState, type KeyboardEvent } from 'react';
@@ -32,6 +33,12 @@ function AppContent() {
     setTab(TABS[next].id);
     tabRefs.current[next]?.focus();
   };
+
+  if (!settings) return <div className="main-window"><main className="panel-content">
+    {loadError ? <p className="error-text" role="alert">{loadError} <button onClick={() => { void reload(); }}>重試</button></p>
+      : <p role="status">正在讀取設定…</p>}
+  </main></div>;
+  if (!settings.onboarding.completed) return <OnboardingWizard />;
 
   return <div className="main-window">
     <header className="app-header"><div className="brand"><span className="brand-mark" aria-hidden="true">⌥</span><strong>Open Typeless</strong></div>

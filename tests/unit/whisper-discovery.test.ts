@@ -1,12 +1,13 @@
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { discoverWhisperServer, resolveWhisperEndpoint } from '../../src/main/services/whisper-server/lib/discovery';
+import { binarySourceForPath, discoverWhisperServer, resolveWhisperEndpoint } from '../../src/main/services/whisper-server/lib/discovery';
 import type { WhisperDiscoveryInputs, WhisperLaunchPlan } from '../../src/main/services/whisper-server/types';
 
 describe('whisper discovery', () => {
   const home = '/fake/home';
   const models = path.join(home, 'whisper.cpp', 'models');
   const binaries = ['/env/whisper-server', `${home}/whisper.cpp/build/bin/whisper-server`, '/opt/homebrew/bin/whisper-server', '/usr/local/bin/whisper-server'];
+  const bundled = '/fake/app/resources/bin/whisper-server';
   const modelNames = ['large-v3-turbo', 'large-v3', 'medium', 'small', 'base'];
   const modelPaths = modelNames.map((name) => path.join(models, `ggml-${name}.bin`));
 
@@ -14,6 +15,7 @@ describe('whisper discovery', () => {
     const existing = new Set(files);
     return {
       env, homedir: () => home, userData: () => '/fake/app',
+      bundledBinary: () => null,
       fileExists: file => existing.has(file), readDirectory: () => names,
       statFile: file => ({ isFile: () => existing.has(file), size: 100 }),
       readHeader: () => Buffer.from('lmgg'),
@@ -29,7 +31,32 @@ describe('whisper discovery', () => {
 
   it.each(binaries.map((binary, index) => ({ binary, index })))('selects $binary ahead of lower-priority binaries', ({ binary, index }) => {
     const deps = dependencies([...binaries.slice(index), modelPaths[0]], { WHISPER_SERVER_BIN: binaries[0] });
-    expect(plan(deps).binary).toBe(binary);
+    expect(plan(deps)).toMatchObject({ binary, binarySource: ['env', 'whisper.cpp', 'homebrew', 'system'][index] });
+  });
+
+  it('prefers the bundled binary over local builds unless the environment overrides it', () => {
+    const deps = dependencies([bundled, ...binaries, modelPaths[0]]);
+    deps.bundledBinary = () => bundled;
+    expect(plan(deps)).toMatchObject({ binary: bundled, binarySource: 'bundled' });
+    deps.env.WHISPER_SERVER_BIN = binaries[0];
+    expect(plan(deps)).toMatchObject({ binary: binaries[0], binarySource: 'env' });
+    deps.env.WHISPER_SERVER_BIN = '/missing/whisper-server';
+    expect(plan(deps)).toMatchObject({ binary: bundled, binarySource: 'bundled' });
+  });
+
+  it.each([null, '/missing/whisper-server'])('falls back to a user build when the bundle is %s', bundle => {
+    const deps = dependencies([binaries[1], modelPaths[0]]);
+    deps.bundledBinary = () => bundle;
+    expect(plan(deps)).toMatchObject({ binary: binaries[1], binarySource: 'whisper.cpp' });
+  });
+
+  it.each([
+    [binaries[0], 'env'], [bundled, 'bundled'], [binaries[1], 'whisper.cpp'],
+    [binaries[2], 'homebrew'], [binaries[3], 'system'], ['/unknown/whisper-server', null],
+  ] as const)('classifies the actual executable %s as %s even if another binary has priority', (binary, binarySource) => {
+    const deps = dependencies([bundled, ...binaries, modelPaths[0]], { WHISPER_SERVER_BIN: binaries[0] });
+    deps.bundledBinary = () => bundled;
+    expect(binarySourceForPath(binary, deps)).toBe(binarySource);
   });
 
   it.each(modelNames.map((name, index) => ({ name, index })))('selects $name ahead of lower-priority models', ({ index }) => {

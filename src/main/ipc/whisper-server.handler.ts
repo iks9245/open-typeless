@@ -25,6 +25,7 @@ export function toWhisperServerInfo(status: WhisperServerStatus): WhisperServerI
     state: status.state,
     reason: status.reason,
     binaryName: fileName(status.binary),
+    binarySource: status.binarySource,
     modelName: fileName(status.model),
     vadModelName: fileName(status.vadModel),
     modelId: status.modelId,

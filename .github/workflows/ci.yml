@@ -42,6 +42,19 @@ jobs:
       - name: Integration tests (Electron)
         run: pnpm test:integration
 
+      - name: Restore whisper-server build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.cache/whisper.cpp
+            resources/bin
+          key: whisper-server-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-whisper-server.sh') }}
+
+      - name: Build whisper-server
+        run: |
+          command -v cmake >/dev/null || { echo '::error::cmake is required to build whisper-server'; exit 1; }
+          bash scripts/build-whisper-server.sh
+
       - name: Package
         run: pnpm package
 

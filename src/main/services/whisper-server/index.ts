@@ -57,6 +57,11 @@ export const whisperServerService = new WhisperServerService({
   discovery: {
     ...modelDependencies,
     env: process.env,
+    bundledBinary: () => {
+      if (app.isPackaged) return path.join(process.resourcesPath, 'whisper-server');
+      const binary = path.join(app.getAppPath(), 'resources', 'bin', 'whisper-server');
+      return existsSync(binary) ? binary : null;
+    },
     fileExists: candidate => {
       try { return existsSync(candidate) && statSync(candidate).isFile(); } catch { return false; }
     },

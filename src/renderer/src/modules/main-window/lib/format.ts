@@ -53,6 +53,11 @@ export function serverStateLabel(state: WhisperServerInfo['state']): string {
   return { idle: '尚未啟動', starting: '正在載入模型…', ready: '就緒', stopped: '已停止', failed: '失敗' }[state];
 }
 
+export function serverBinaryLabel(status: WhisperServerInfo): string | null {
+  if (status.binaryName === null) return null;
+  return status.binarySource === 'bundled' ? `${status.binaryName}（內建）` : status.binaryName;
+}
+
 export function formatModelSize(sizeBytes: number): string {
   return sizeBytes >= 1024 ** 3 ? `${(sizeBytes / 1024 ** 3).toFixed(1)} GB` : `${(sizeBytes / 1024 ** 2).toFixed(1)} MB`;
 }

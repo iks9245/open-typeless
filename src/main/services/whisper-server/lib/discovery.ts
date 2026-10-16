@@ -3,8 +3,24 @@
  */
 
 import path from 'node:path';
+import type { WhisperBinarySource } from '../../../../shared/types/whisper-server';
 import type { WhisperDiscoveryInputs, WhisperDiscoveryResult, WhisperEndpoint } from '../types';
 import { isWhisperModel, modelIdForPath, modelPath } from './models';
+
+function binaryCandidates(deps: WhisperDiscoveryInputs): { binary: string | null | undefined; source: Exclude<WhisperBinarySource, null> }[] {
+  return [
+    { binary: deps.env.WHISPER_SERVER_BIN, source: 'env' },
+    { binary: deps.bundledBinary(), source: 'bundled' },
+    { binary: path.join(deps.homedir(), 'whisper.cpp', 'build', 'bin', 'whisper-server'), source: 'whisper.cpp' },
+    { binary: '/opt/homebrew/bin/whisper-server', source: 'homebrew' },
+    { binary: '/usr/local/bin/whisper-server', source: 'system' },
+  ];
+}
+
+/** Classify the actual adopted executable, which can differ from today's preferred binary. */
+export function binarySourceForPath(binary: string, deps: WhisperDiscoveryInputs): WhisperBinarySource {
+  return binaryCandidates(deps).find(candidate => candidate.binary && path.resolve(candidate.binary) === path.resolve(binary))?.source ?? null;
+}
 
 export function resolveWhisperEndpoint(serverUrl: string): WhisperEndpoint {
   try {
@@ -37,13 +53,9 @@ export function discoverWhisperServer(serverUrl: string, deps: WhisperDiscoveryI
   const models = path.join(home, 'whisper.cpp', 'models');
   const firstExisting = (candidates: (string | undefined)[]): string | undefined =>
     candidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0 && deps.fileExists(candidate));
-  const binary = firstExisting([
-    deps.env.WHISPER_SERVER_BIN,
-    path.join(home, 'whisper.cpp', 'build', 'bin', 'whisper-server'),
-    '/opt/homebrew/bin/whisper-server',
-    '/usr/local/bin/whisper-server',
-  ]);
-  if (!binary) return { available: false, reason: 'whisper-server binary not found' };
+  const candidate = binaryCandidates(deps).find(({ binary }) => binary && deps.fileExists(binary));
+  if (!candidate?.binary) return { available: false, reason: 'whisper-server binary not found' };
+  const { binary, source: binarySource } = candidate;
 
   const envModel = firstExisting([deps.env.WHISPER_MODEL_PATH]);
   const selectedPath = selectedModel === null ? null : modelPath(selectedModel, deps);
@@ -72,7 +84,7 @@ export function discoverWhisperServer(serverUrl: string, deps: WhisperDiscoveryI
   const args = ['-m', model, '-l', 'auto', '--host', '127.0.0.1', '--port', String(endpoint.port)];
   if (vadModel !== null) args.push('--vad', '--vad-model', vadModel);
   return { available: true, plan: {
-    binary, model, modelId: modelIdForPath(model, deps), modelFallback,
+    binary, binarySource, model, modelId: modelIdForPath(model, deps), modelFallback,
     modelLocked: deps.env.WHISPER_MODEL_PATH ? 'env' : null,
     vadModel, host: '127.0.0.1', port: endpoint.port, args,
   } };

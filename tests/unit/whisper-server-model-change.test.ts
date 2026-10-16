@@ -27,6 +27,7 @@ function setup(external = false) {
     getModel: () => model, getServerUrl: () => 'http://localhost:8080', pidFilePath: () => '/app/server.pid',
     kill: vi.fn(),
     discovery: {
+      bundledBinary: () => null,
       env: {}, homedir: () => '/home', userData: () => '/app', readDirectory: () => [],
       fileExists: file => ['/home/whisper.cpp/build/bin/whisper-server', '/home/whisper.cpp/models/ggml-base.bin'].includes(file),
       statFile: () => ({ isFile: () => true, size: 100 }), readHeader: () => Buffer.from('lmgg'),
@@ -42,10 +43,44 @@ function setup(external = false) {
 }
 
 describe('whisper model changes', () => {
+  it('reports the bundled source when launching and restarting its server', async () => {
+    const { service, deps } = setup();
+    const bundled = '/app/resources/bin/whisper-server';
+    const fileExists = deps.discovery.fileExists;
+    deps.discovery.bundledBinary = () => bundled;
+    deps.discovery.fileExists = file => file === bundled || fileExists(file);
+    expect(service.status().binarySource).toBeNull();
+    await service.start();
+    expect(service.status()).toMatchObject({ mode: 'managed', state: 'ready', binary: bundled, binarySource: 'bundled' });
+    await service.restart();
+    expect(service.status()).toMatchObject({ mode: 'managed', state: 'ready', binary: bundled, binarySource: 'bundled' });
+    expect(deps.spawn).toHaveBeenLastCalledWith(bundled, expect.any(Array), expect.any(Object));
+    await service.stop();
+  });
+
+  it('reports an adopted user build even when a bundled binary now has priority', async () => {
+    const { service, deps } = setup();
+    let orphanAlive = true;
+    const record = { pid: 42, binary: '/home/whisper.cpp/build/bin/whisper-server', port: 8080, startedAt: 0 };
+    const fileExists = deps.discovery.fileExists;
+    deps.discovery.bundledBinary = () => '/app/resources/bin/whisper-server';
+    deps.discovery.fileExists = file => file === deps.discovery.bundledBinary() || fileExists(file);
+    deps.ownership.readFile = async () => JSON.stringify(record);
+    deps.ownership.processAlive = () => orphanAlive;
+    deps.ownership.commandOf = async () => `${record.binary} -m /home/whisper.cpp/models/ggml-base.bin --port 8080`;
+    deps.kill = vi.fn(() => { orphanAlive = false; });
+    deps.healthCheck = vi.fn(async () => true);
+    await service.start();
+    expect(service.status()).toMatchObject({ mode: 'adopted', state: 'ready', binary: record.binary, binarySource: 'whisper.cpp' });
+    expect(deps.spawn).not.toHaveBeenCalled();
+    expect(deps.kill).not.toHaveBeenCalled();
+    await service.stop();
+  });
+
   it('restarts a managed process and launches the selected model', async () => {
     const { service, deps, children, select } = setup();
     await service.start();
-    expect(service.status()).toMatchObject({ mode: 'managed', state: 'ready' });
+    expect(service.status()).toMatchObject({ mode: 'managed', state: 'ready', binarySource: 'whisper.cpp' });
     select('app/cantonese.bin');
     const restart = service.modelChanged();
     expect(service.status().state).toBe('starting');
@@ -61,7 +96,7 @@ describe('whisper model changes', () => {
     await service.start();
     select('app/cantonese.bin');
     await service.modelChanged();
-    expect(service.status()).toMatchObject({ mode: 'external', state: 'ready', modelId: null, modelLocked: 'external' });
+    expect(service.status()).toMatchObject({ mode: 'external', state: 'ready', binarySource: null, modelId: null, modelLocked: 'external' });
     expect(deps.spawn).not.toHaveBeenCalled();
     expect(deps.kill).not.toHaveBeenCalled();
   });

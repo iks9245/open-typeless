@@ -7,7 +7,7 @@ import type { ChildProcess } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import nodePath from 'node:path';
-import { discoverWhisperServer, resolveWhisperEndpoint } from './lib/discovery';
+import { binarySourceForPath, discoverWhisperServer, resolveWhisperEndpoint } from './lib/discovery';
 import { findOwnedWhisperProcess, modelFromCommand, removeWhisperPid, writeWhisperPid } from './lib/ownership';
 import { modelIdForPath } from './lib/models';
 import type { WhisperLaunchPlan, WhisperPidRecord, WhisperServerDependencies, WhisperServerStatus } from './types';
@@ -23,6 +23,7 @@ interface OwnedProcess {
 
 const INITIAL_STATUS: WhisperServerStatus = {
   mode: 'none', state: 'idle', pid: null, binary: null, model: null, vadModel: null, reason: null,
+  binarySource: null,
   modelId: null, modelFallback: false, modelLocked: null,
 };
 
@@ -176,6 +177,7 @@ export class WhisperServerService {
       }
       this.update({
         mode: 'adopted', pid: record.pid, binary: record.binary,
+        binarySource: binarySourceForPath(record.binary, this.deps.discovery),
         model, modelId: model === null ? null : modelIdForPath(model, this.deps.discovery),
         vadModel: discovery.available === true ? discovery.plan.vadModel : null,
       });
@@ -207,6 +209,7 @@ export class WhisperServerService {
     if (generation !== this.generation) return;
     this.update({
       mode: 'managed', state: 'starting', binary: plan.binary, model: plan.model, vadModel: plan.vadModel, reason: null,
+      binarySource: plan.binarySource,
       modelId: plan.modelId, modelFallback: plan.modelFallback, modelLocked: plan.modelLocked,
     });
     const child = this.deps.spawn(plan.binary, plan.args, { stdio: ['ignore', 'pipe', 'pipe'] });

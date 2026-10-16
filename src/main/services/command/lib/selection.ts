@@ -28,7 +28,7 @@ export async function captureSelection<Image extends { isEmpty(): boolean }>(dep
   };
   const unknown = formats.filter(format => !/^(text\/(plain|html|rtf)|image\/[^/]+)$/i.test(format));
   if (unknown.length) deps.logger.warn(`Clipboard formats cannot be restored: ${unknown.join(', ')}`);
-  const sentinel = `open-typeless-selection-${randomUUID()}`;
+  const sentinel = `waae-selection-${randomUUID()}`;
   try {
     deps.clipboard.writeText(sentinel);
     deps.keyTap();

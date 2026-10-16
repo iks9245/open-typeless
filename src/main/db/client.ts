@@ -21,7 +21,7 @@ let databaseClient: { sqlite: Database.Database; db: AppDatabase } | null = null
  * Open an independent connection. Explicit filenames do not require Electron APIs.
  */
 export function openDatabase(filename?: string): { sqlite: Database.Database; db: AppDatabase } {
-  const databasePath = filename ?? path.join(app.getPath('userData'), 'open-typeless.db');
+  const databasePath = filename ?? path.join(app.getPath('userData'), 'waae.db');
 
   if (databasePath !== ':memory:') {
     mkdirSync(path.dirname(databasePath), { recursive: true });

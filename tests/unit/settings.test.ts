@@ -21,7 +21,7 @@ describe('settings', () => {
   it('uses environment defaults without storing them', () => {
     const defaults = getDefaultSettings(env);
     expect(defaults).toEqual({
-      onboarding: { completed: false, step: null, primaryLanguage: null },
+      onboarding: { completed: false, step: null, primaryLanguage: null, migratedFromLegacy: false },
       memory: { enabled: true },
       history: { enabled: true, saveAudio: false, retentionDays: null },
       asr: { model: null, language: 'zh', whisperServerUrl: 'http://localhost:9000', vocabulary: [] },

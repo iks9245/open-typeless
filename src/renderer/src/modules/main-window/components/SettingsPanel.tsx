@@ -205,7 +205,7 @@ export function SettingsPanel({ active }: { active: boolean }) {
             checked={loginItem.state?.enabled ?? false} disabled={!loginItem.state?.supported || loginItem.pending}
             onChange={(event) => { void loginItem.setEnabled(event.target.checked); }} />
         </SettingRow>
-        {loginItem.state?.requiresApproval && <p className="muted help" role="status">請到「系統設定 → 一般 → 登入項目」允許 Open Typeless。</p>}
+        {loginItem.state?.requiresApproval && <p className="muted help" role="status">請到「系統設定 → 一般 → 登入項目」允許 WaaE。</p>}
         <SettingRow title="自動插入文字" detail="辨識完成後，將文字插入目前使用的應用程式。">
           <input type="checkbox" role="switch" className="switch" aria-label="自動插入文字" data-testid="settings-auto-insert"
             checked={settings?.input.autoInsert ?? false} disabled={disabled} onChange={(event) => { void update({ input: { autoInsert: event.target.checked } }); }} />

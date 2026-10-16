@@ -30,8 +30,8 @@ export function validateCatalog(input: unknown, allowLoopback = false): ModelCat
 
 /** Packaged apps never read the development override, even if the variable is set. */
 export function loadModelCatalog(isPackaged: boolean, env: NodeJS.ProcessEnv, read: (file: string) => string): ModelCatalogEntry[] {
-  if (!isPackaged && env.OPEN_TYPELESS_MODEL_CATALOG) {
-    try { return validateCatalog(JSON.parse(read(env.OPEN_TYPELESS_MODEL_CATALOG)), true); }
+  if (!isPackaged && env.WAAE_MODEL_CATALOG) {
+    try { return validateCatalog(JSON.parse(read(env.WAAE_MODEL_CATALOG)), true); }
     catch { throw new Error('Invalid development model catalog'); }
   }
   return validateCatalog(MODEL_CATALOG);

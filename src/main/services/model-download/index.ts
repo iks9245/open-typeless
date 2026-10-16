@@ -14,7 +14,7 @@ export function getModelDownloadService(): ModelDownloadService {
     catalog: loadModelCatalog(app.isPackaged, process.env, file => readFileSync(file, 'utf8')),
     directories: { userData: () => app.getPath('userData'), homedir },
     logger: log.scope('model-download'),
-    allowLoopback: !app.isPackaged && Boolean(process.env.OPEN_TYPELESS_MODEL_CATALOG),
+    allowLoopback: !app.isPackaged && Boolean(process.env.WAAE_MODEL_CATALOG),
     selectedModel: () => {
       const result = settingsService.get();
       return result.success ? result.data.asr.model : null;

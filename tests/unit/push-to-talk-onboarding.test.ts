@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   dialog: vi.fn(), appOn: vi.fn(), appOff: vi.fn(), settingsOn: vi.fn(), settingsOff: vi.fn(),
 }));
 vi.mock('electron', () => ({
-  app: { on: mocks.appOn, off: mocks.appOff, getName: () => 'Open Typeless' },
+  app: { on: mocks.appOn, off: mocks.appOff, getName: () => 'WaaE' },
   BrowserWindow: { getAllWindows: () => [] }, dialog: { showMessageBox: mocks.dialog },
 }));
 vi.mock('../../src/main/services/settings', () => ({ settingsService: {

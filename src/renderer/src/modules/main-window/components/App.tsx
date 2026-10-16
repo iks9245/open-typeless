@@ -41,7 +41,7 @@ function AppContent() {
   if (!settings.onboarding.completed) return <OnboardingWizard />;
 
   return <div className="main-window">
-    <header className="app-header"><div className="brand"><span className="brand-mark" aria-hidden="true">⌥</span><strong>Open Typeless</strong></div>
+    <header className="app-header"><div className="brand"><span className="brand-mark" aria-hidden="true">⌥</span><strong>WaaE</strong></div>
       <nav role="tablist" aria-label="主視窗分頁">{TABS.map((item, index) => <button key={item.id}
         ref={(element) => { tabRefs.current[index] = element; }} id={`tab-${item.id}`} data-testid={`tab-${item.id}`}
         role="tab" aria-selected={tab === item.id} aria-controls={`panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1}

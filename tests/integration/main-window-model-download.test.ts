@@ -32,7 +32,7 @@ run(async () => {
   const key = 'ui-download';
   const entry = { ...MODEL_CATALOG[1], key, fileName: 'ggml-ui-download.bin', title: '整合測試模型', size: content.length,
     sha256: createHash('sha256').update(content).digest('hex'), url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/file` };
-  const override = process.env.OPEN_TYPELESS_MODEL_CATALOG;
+  const override = process.env.WAAE_MODEL_CATALOG;
   assert(override, 'runner provides isolated catalog override');
   await writeFile(override, JSON.stringify([entry, { ...entry, key: 'ui-other', fileName: 'ggml-ui-other.bin', title: '另一個模型', recommendedFor: 'light' }]));
   const { initDatabase } = await import('../../src/main/db');

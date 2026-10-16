@@ -10,7 +10,7 @@ export type OnboardingStep = typeof ONBOARDING_STEPS[number];
 export type PrimaryLanguage = 'yue' | 'zh' | 'en' | 'other';
 
 export interface AppSettings {
-  onboarding: { completed: boolean; step: OnboardingStep | null; primaryLanguage: PrimaryLanguage | null };
+  onboarding: { migratedFromLegacy: boolean; completed: boolean; step: OnboardingStep | null; primaryLanguage: PrimaryLanguage | null };
   memory: { enabled: boolean };
   history: {
     enabled: boolean;

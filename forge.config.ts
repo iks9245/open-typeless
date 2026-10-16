@@ -15,7 +15,7 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
 /** Self-signed certificate created in Keychain Access for local builds (see README) */
-const LOCAL_SIGNING_IDENTITY = 'Open Typeless Dev';
+const LOCAL_SIGNING_IDENTITIES = ['WaaE Dev', 'Open Typeless Dev'];
 
 /**
  * The identity used to sign a macOS build: CODESIGN_IDENTITY when set, else the local
@@ -28,7 +28,9 @@ async function signingIdentity(): Promise<string> {
   try {
     // Without -v: a self-signed root is not trusted for policy checks but can still sign
     const { stdout } = await execFileAsync('security', ['find-identity', '-p', 'codesigning']);
-    if (stdout.includes(`"${LOCAL_SIGNING_IDENTITY}"`)) return LOCAL_SIGNING_IDENTITY;
+    for (const identity of LOCAL_SIGNING_IDENTITIES) {
+      if (stdout.includes(`"${identity}"`)) return identity;
+    }
   } catch {
     // No keychain access (for example on CI): fall back to ad-hoc
   }
@@ -53,6 +55,10 @@ const nativeModules = [
 
 const config: ForgeConfig = {
   packagerConfig: {
+    name: 'WaaE',
+    executableName: 'WaaE',
+    appBundleId: 'io.github.iks9245.waae',
+    icon: 'assets/icon',
     asar: {
       unpack: '*.{node,dll}',
     },

@@ -1,3 +1,5 @@
+// Keep first: this import migrates legacy data before other modules can access storage.
+import { legacyMigration } from './main/services/migration/startup';
 import { stopModelDownload } from './main/services/model-download';
 import 'dotenv/config';
 import { memoryIndexer } from './main/services/memory';
@@ -11,7 +13,7 @@ import { loginItemService } from './main/services/login-item';
 import { installPermissionHandlers } from './main/security/permissions';
 import { floatingWindow } from './main/windows';
 import { pushToTalkService } from './main/services';
-import { migrateExistingUser } from './main/services/onboarding';
+import { migrateExistingUser, resetMigratedPermissions } from './main/services/onboarding';
 import { settingsService } from './main/services/settings';
 import { closeDatabase, getDb, initDatabase } from './main/db';
 import { historyService } from './main/services/history';
@@ -50,6 +52,7 @@ const initStorage = (): void => {
   }
 
   migrateExistingUser(getDb());
+  if (legacyMigration.migrated) resetMigratedPermissions(getDb());
 
   // Sessions cut off by a crash or forced quit become failed/interrupted
   const recovered = historyService.recover();

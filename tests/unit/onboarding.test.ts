@@ -2,7 +2,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { openDatabase, runMigrations, settings, transcriptions } from '../../src/main/db';
-import { migrateExistingUser } from '../../src/main/services/onboarding';
+import { migrateExistingUser, resetMigratedPermissions } from '../../src/main/services/onboarding';
 import { getSettings, updateSettings } from '../../src/main/services/settings/procedures';
 import { isRecentOnboardingTrial, onboardingRecommendations } from '../../src/shared/lib/onboarding';
 import { ONBOARDING_STEPS } from '../../src/shared/types/settings';
@@ -51,7 +51,7 @@ describe('onboarding persistence and migration', () => {
 
   it('leaves an empty history incomplete without storing a completed row', () => {
     migrateExistingUser(connection.db, now);
-    expect(read()).toEqual({ completed: false, step: null, primaryLanguage: null });
+    expect(read()).toEqual({ completed: false, step: null, primaryLanguage: null, migratedFromLegacy: false });
     expect(connection.db.select().from(settings).all()).toEqual([]);
   });
   it('marks any existing history as complete exactly once', () => {
@@ -67,7 +67,7 @@ describe('onboarding persistence and migration', () => {
     const before = connection.db.select().from(settings).all();
     migrateExistingUser(connection.db, () => 999999);
     expect(connection.db.select().from(settings).all()).toEqual(before);
-    expect(read()).toEqual({ completed, step: 'try', primaryLanguage: 'yue' });
+    expect(read()).toEqual({ completed, step: 'try', primaryLanguage: 'yue', migratedFromLegacy: false });
   });
   it('preserves even an invalid stored completed row instead of inferring a new user choice', () => {
     seedHistory();
@@ -79,8 +79,38 @@ describe('onboarding persistence and migration', () => {
   it.each([...ONBOARDING_STEPS, null])('persists and resumes step %s without losing other settings', step => {
     const result = updateSettings(connection.db, { onboarding: { step }, input: { autoInsert: false } }, now, {});
     expect(result.success).toBe(true);
-    expect(read()).toEqual({ completed: false, step, primaryLanguage: null });
+    expect(read()).toEqual({ completed: false, step, primaryLanguage: null, migratedFromLegacy: false });
     expect(getSettings(connection.db, {})).toEqual(result);
+  });
+  it.each([true, false])('resets migrated permissions only for completed=%s', completed => {
+    updateSettings(connection.db, {
+      onboarding: { completed, step: 'try', primaryLanguage: 'yue' },
+      asr: { vocabulary: ['WaaE'], model: 'app/ggml-base.bin' }, input: { autoInsert: false },
+    }, now, {});
+    const before = getSettings(connection.db, {});
+    resetMigratedPermissions(connection.db, () => 999999);
+    expect(read()).toEqual({
+      completed: false, step: completed ? 'microphone' : 'try', primaryLanguage: 'yue', migratedFromLegacy: completed,
+    });
+    const after = getSettings(connection.db, {});
+    if (!before.success || !after.success) throw new Error('settings unavailable');
+    expect({ ...after.data, onboarding: before.data.onboarding }).toEqual(before.data);
+    // An interrupted permission wizard must resume without resetting its progress.
+    updateSettings(connection.db, { onboarding: { step: 'accessibility' } }, now, {});
+    resetMigratedPermissions(connection.db, now);
+    expect(read().step).toBe('accessibility');
+  });
+  it('does not set migration flags for missing or invalid completion; clears the flag at done', () => {
+    resetMigratedPermissions(connection.db, now);
+    expect(read().migratedFromLegacy).toBe(false);
+    connection.sqlite.prepare('INSERT INTO settings VALUES (?, ?, ?)').run('onboarding.completed', '"true"', 1);
+    resetMigratedPermissions(connection.db, now);
+    expect(read().migratedFromLegacy).toBe(false);
+    updateSettings(connection.db, { onboarding: { completed: true } }, now, {});
+    resetMigratedPermissions(connection.db, now);
+    expect(read().migratedFromLegacy).toBe(true);
+    updateSettings(connection.db, { onboarding: { completed: true, step: null, migratedFromLegacy: false } }, now, {});
+    expect(read()).toEqual({ completed: true, step: null, primaryLanguage: null, migratedFromLegacy: false });
   });
   it.each(['yue', 'zh', 'en', 'other', null])('persists primary language %s', primaryLanguage => {
     expect(updateSettings(connection.db, { onboarding: { primaryLanguage } }, now, {}).success).toBe(true);
@@ -88,7 +118,7 @@ describe('onboarding persistence and migration', () => {
   });
   it.each([
     { step: 'invalid' }, { step: 1 }, { step: true }, { completed: 'true' }, { completed: null },
-    { primaryLanguage: 'ja' }, { primaryLanguage: 1 }, { unknown: true },
+    { migratedFromLegacy: 'true' }, { migratedFromLegacy: null }, { primaryLanguage: 'ja' }, { primaryLanguage: 1 }, { unknown: true },
   ])('rejects invalid onboarding %j atomically', onboarding => {
     expect(updateSettings(connection.db, { onboarding, input: { autoInsert: false } }, now, {}).success).toBe(false);
     expect(connection.db.select().from(settings).all()).toEqual([]);
@@ -100,11 +130,11 @@ describe('onboarding persistence and migration', () => {
       asr: { language: recommendation.asrLanguage }, polish: { style: recommendation.polishStyle },
     }, now, { WHISPER_LANGUAGE: 'zh' });
     updateSettings(connection.db, { onboarding: { completed: true, step: null } }, now, {});
-    expect(read()).toEqual({ primaryLanguage: 'yue', completed: true, step: null });
+    expect(read()).toEqual({ primaryLanguage: 'yue', completed: true, step: null, migratedFromLegacy: false });
     seedHistory();
     updateSettings(connection.db, { onboarding: { completed: false, step: 'welcome' } }, now, {});
     migrateExistingUser(connection.db, now);
-    expect(read()).toEqual({ primaryLanguage: 'yue', completed: false, step: 'welcome' });
+    expect(read()).toEqual({ primaryLanguage: 'yue', completed: false, step: 'welcome', migratedFromLegacy: false });
     const result = getSettings(connection.db, {});
     expect(result).toMatchObject({ success: true, data: { asr: { language: null }, polish: { style: 'standard' } } });
   });

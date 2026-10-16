@@ -15,7 +15,7 @@ import { createRedactor, redactJson } from './redact';
 
 export const LOG_TAIL_BYTES = 2 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
-const README = `Open Typeless 診斷資料\n\n包含：app 與系統版本、設定（詞彙表僅含數量）、伺服器與權限狀態、\noMLX 可用狀態與模型數量、模型安裝狀態、記憶索引狀態、歷史分類統計、\n最近 50 次聽寫的時間、狀態、耗時與錯誤資訊，以及每份最多最後 2 MB 的記錄檔。\n\n不包含：任何聽寫文字、錄音、錄音路徑、詞彙表內容、歷史紀錄識別碼、\n歷史中繼資料或 API 金鑰。家目錄及路徑中的使用者名稱已遮蔽。\n資料只儲存在你選擇的位置，不會自動上傳。\n`;
+const README = `WaaE 診斷資料\n\n包含：app 與系統版本、設定（詞彙表僅含數量）、伺服器與權限狀態、\noMLX 可用狀態與模型數量、模型安裝狀態、記憶索引狀態、歷史分類統計、\n最近 50 次聽寫的時間、狀態、耗時與錯誤資訊，以及每份最多最後 2 MB 的記錄檔。\n\n不包含：任何聽寫文字、錄音、錄音路徑、詞彙表內容、歷史紀錄識別碼、\n歷史中繼資料或 API 金鑰。家目錄及路徑中的使用者名稱已遮蔽。\n資料只儲存在你選擇的位置，不會自動上傳。\n`;
 
 export interface DiagnosticsDependencies {
   summary: () => Promise<DiagnosticsSummary>;
@@ -85,7 +85,7 @@ export class DiagnosticsService {
   async collect() { return (await this.snapshot()).report; }
 
   async export(targetZipPath: string): Promise<string> {
-    const temporary = await mkdtemp(path.join(this.deps.tempDirectory(), 'open-typeless-diagnostics-'));
+    const temporary = await mkdtemp(path.join(this.deps.tempDirectory(), 'waae-diagnostics-'));
     // The folder inside the archive is named after the zip, not the random temp directory
     const directory = path.join(temporary, path.basename(targetZipPath, path.extname(targetZipPath)));
     try {

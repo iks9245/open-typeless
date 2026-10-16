@@ -36,7 +36,7 @@ describe('diagnostics IPC', () => {
     expect([...handlers.keys()]).toEqual(Object.values(IPC_CHANNELS.DIAGNOSTICS));
     setupDiagnosticsHandlers();
     expect(mocks.handle).not.toHaveBeenCalled();
-    expect(diagnosticsFileName(new Date(2026, 9, 6, 9, 5))).toBe('open-typeless-diagnostics-20261006-0905.zip');
+    expect(diagnosticsFileName(new Date(2026, 9, 6, 9, 5))).toBe('waae-diagnostics-20261006-0905.zip');
   });
   it.each(['unregistered', 'floating', 'subframe', 'navigated'] as const)('rejects %s senders for all operations', async kind => {
     const { webContents, mainFrame } = mockWebContents('file:///app/index.html');
@@ -48,7 +48,7 @@ describe('diagnostics IPC', () => {
   });
   it('shows a save dialog on the main window and supports cancellation without exporting', async () => {
     expect(await invoke(IPC_CHANNELS.DIAGNOSTICS.EXPORT)).toEqual({ success: true, data: { saved: false, fileName: null } });
-    expect(mocks.save).toHaveBeenCalledWith(mocks.fromContents.mock.results[0].value, expect.objectContaining({ defaultPath: expect.stringMatching(/^\/Users\/test\/Desktop\/open-typeless-diagnostics-\d{8}-\d{4}\.zip$/) }));
+    expect(mocks.save).toHaveBeenCalledWith(mocks.fromContents.mock.results[0].value, expect.objectContaining({ defaultPath: expect.stringMatching(/^\/Users\/test\/Desktop\/waae-diagnostics-\d{8}-\d{4}\.zip$/) }));
     expect(mocks.export).not.toHaveBeenCalled();
   });
   it('returns the summary and keeps save/reveal paths in main, ignoring renderer paths', async () => {

@@ -15,7 +15,7 @@ const logger = log.scope('database-init');
  * On any failure the connection is closed, so isDatabaseAvailable() reports false and
  * history/settings fall back to their storage-unavailable behavior. Dictation keeps working.
  *
- * @param filename - Database file; defaults to userData/open-typeless.db
+ * @param filename - Database file; defaults to userData/waae.db
  * @param migrationsFolder - Migration SQL folder; defaults to the dev or packaged location
  * @returns true if the database is ready
  */

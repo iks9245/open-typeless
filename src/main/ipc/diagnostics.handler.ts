@@ -11,7 +11,7 @@ let handlersRegistered = false;
 
 export function diagnosticsFileName(now: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0');
-  return `open-typeless-diagnostics-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.zip`;
+  return `waae-diagnostics-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.zip`;
 }
 
 export interface DiagnosticsHandlerDependencies {

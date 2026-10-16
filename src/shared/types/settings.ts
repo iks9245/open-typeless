@@ -5,7 +5,12 @@
 
 import type { TriggerKeyId } from '../constants/keyboard';
 
+export const ONBOARDING_STEPS = ['welcome', 'model', 'microphone', 'accessibility', 'try', 'ai', 'done'] as const;
+export type OnboardingStep = typeof ONBOARDING_STEPS[number];
+export type PrimaryLanguage = 'yue' | 'zh' | 'en' | 'other';
+
 export interface AppSettings {
+  onboarding: { completed: boolean; step: OnboardingStep | null; primaryLanguage: PrimaryLanguage | null };
   memory: { enabled: boolean };
   history: {
     enabled: boolean;
@@ -36,6 +41,7 @@ export interface AppSettings {
 }
 
 export interface AppSettingsPatch {
+  onboarding?: Partial<AppSettings['onboarding']>;
   memory?: Partial<AppSettings['memory']>;
   history?: Partial<AppSettings['history']>;
   asr?: Partial<AppSettings['asr']>;

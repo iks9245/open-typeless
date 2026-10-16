@@ -5,7 +5,7 @@
 
 import log from 'electron-log';
 import { z } from 'zod';
-import type { AppSettings, AppSettingsPatch } from '../../../shared/types/settings';
+import { ONBOARDING_STEPS, type AppSettings, type AppSettingsPatch } from '../../../shared/types/settings';
 import { TRIGGER_KEYS, type TriggerKeyId } from '../../../shared/constants/keyboard';
 import { DEFAULT_COMMAND_MODEL } from '../../../shared/constants/command';
 import { DEFAULT_POLISH_MODEL } from '../../../shared/constants/polish';
@@ -23,6 +23,12 @@ export interface SettingsService {
   on(event: 'changed', listener: (settings: AppSettings) => void): SettingsService;
   off(event: 'changed', listener: (settings: AppSettings) => void): SettingsService;
 }
+
+const onboardingSchema = z.object({
+  completed: z.boolean(),
+  step: z.enum(ONBOARDING_STEPS).nullable(),
+  primaryLanguage: z.enum(['yue', 'zh', 'en', 'other']).nullable(),
+}).strict();
 
 const memorySchema = z.object({ enabled: z.boolean() }).strict();
 
@@ -58,6 +64,7 @@ const commandSchema = z.object({
 const polishSchema = commandSchema.extend({ style: z.enum(['auto', 'standard', 'cantonese']) });
 
 export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
+  onboarding: onboardingSchema,
   memory: memorySchema,
   history: historySchema,
   asr: asrSchema,
@@ -67,6 +74,7 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
 }).strict();
 
 export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
+  onboarding: onboardingSchema.partial().optional(),
   memory: memorySchema.partial().optional(),
   history: historySchema.partial().optional(),
   asr: asrSchema.partial().optional(),
@@ -78,6 +86,9 @@ export const settingsPatchSchema: z.ZodType<AppSettingsPatch> = z.object({
 export const emptySettingsInputSchema = z.object({}).strict();
 
 export const settingSchemas = {
+  'onboarding.completed': onboardingSchema.shape.completed,
+  'onboarding.step': onboardingSchema.shape.step,
+  'onboarding.primaryLanguage': onboardingSchema.shape.primaryLanguage,
   'memory.enabled': memorySchema.shape.enabled,
   'history.enabled': historySchema.shape.enabled,
   'history.saveAudio': historySchema.shape.saveAudio,
@@ -104,6 +115,9 @@ export function isSettingKey(key: string): key is SettingKey {
 export function applySetting(target: AppSettings, key: SettingKey, value: unknown): void {
   // Values have already been checked with the matching dotted-key schema.
   switch (key) {
+    case 'onboarding.completed': target.onboarding.completed = value as boolean; break;
+    case 'onboarding.step': target.onboarding.step = value as AppSettings['onboarding']['step']; break;
+    case 'onboarding.primaryLanguage': target.onboarding.primaryLanguage = value as AppSettings['onboarding']['primaryLanguage']; break;
     case 'memory.enabled': target.memory.enabled = value as boolean; break;
     case 'history.enabled': target.history.enabled = value as boolean; break;
     case 'history.saveAudio': target.history.saveAudio = value as boolean; break;
@@ -128,6 +142,7 @@ export function getDefaultSettings(env: SettingsEnvironment = process.env): AppS
     logger.warn('Ignoring invalid WHISPER_SERVER_URL', { error: url.error.issues[0].message });
   }
   return {
+    onboarding: { completed: false, step: null, primaryLanguage: null },
     memory: { enabled: true },
     history: { enabled: true, saveAudio: false, retentionDays: null },
     asr: {

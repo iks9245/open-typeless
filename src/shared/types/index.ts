@@ -10,7 +10,7 @@ export type {
   AudioChunk,
 } from './asr';
 
-export type { AppSettings, AppSettingsPatch } from './settings';
+export type { AppSettings, AppSettingsPatch, OnboardingStep, PrimaryLanguage } from './settings';
 export type { IpcResult } from './common';
 export type { WhisperServerInfo, WhisperModelInfo } from './whisper-server';
 export type { PolishInfo, PolishUnavailableReason } from './polish';
@@ -26,3 +26,5 @@ export type { ReportRange, ReportInput, ReportTotals, FillerCount, WordCount, Sp
 export type { AskResult, AskSource, AskEntry, MemoryStatus } from './memory';
 
 export type { ModelCatalogEntry, ModelCatalogState, ModelDownloadProgress } from './model-download';
+
+export type { LoginItemState, SystemInfo, PermissionsStatus, OnboardingPermission } from './system';

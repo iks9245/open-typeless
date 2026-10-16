@@ -6,6 +6,7 @@ import { setupMemoryHandlers } from './memory.handler';
  */
 
 import { setupReportHandlers } from './report.handler';
+import { setupPermissionsHandlers } from './permissions.handler';
 import { setupSystemHandlers } from './system.handler';
 import { setupPolishHandlers } from './polish.handler';
 import { setupASRHandlers } from './asr.handler';
@@ -21,6 +22,7 @@ import { setupWhisperServerHandlers } from './whisper-server.handler';
 export function setupAllIpcHandlers(): void {
   setupASRHandlers();
   setupSystemHandlers();
+  setupPermissionsHandlers();
   setupPolishHandlers();
   setupReportHandlers();
   setupMemoryHandlers();

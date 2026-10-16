@@ -87,6 +87,13 @@ export function SettingsPanel({ active }: { active: boolean }) {
     <div className="panel-content settings-panel">
       <div className="section-heading"><div><h1>設定</h1><p className="muted">依照你的習慣，調整聽寫體驗。</p></div></div>
       {showLoading && <p className="muted" role="status">正在讀取設定…</p>}
+      <section className="settings-section" aria-labelledby="general-heading">
+        <h2 id="general-heading">一般</h2>
+        <div className="card"><SettingRow title="設定精靈" detail="重新選擇語言、模型和權限設定。">
+          <button data-testid="settings-rerun-onboarding" disabled={disabled}
+            onClick={() => { void update({ onboarding: { completed: false, step: 'welcome' } }); }}>重新執行設定精靈</button>
+        </SettingRow></div>
+      </section>
       <section className="settings-section" aria-labelledby="asr-heading">
         <h2 id="asr-heading">語音辨識</h2>
         <div className="card">

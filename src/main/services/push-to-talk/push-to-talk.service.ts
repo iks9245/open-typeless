@@ -124,16 +124,18 @@ export class PushToTalkService {
     // Log permission status for debugging
     permissionsService.logPermissionStatus();
 
-    // Ask macOS for microphone access up front. Without it the status stays
+    // After onboarding, ask macOS for microphone access up front. Without it the status stays
     // 'not-determined' and the renderer's getUserMedia captures silence, which
     // whisper.cpp transcribes as phantom text such as "Thank you."
-    void permissionsService.requestMicrophonePermission().then((granted) => {
-      if (granted) {
-        logger.info('Microphone access granted');
-      } else {
-        logger.warn('Microphone access not granted: recordings will be silent until it is allowed');
-      }
-    });
+    if (settings.success === true && settings.data.onboarding.completed) {
+      void permissionsService.requestMicrophonePermission().then((granted) => {
+        if (granted) {
+          logger.info('Microphone access granted');
+        } else {
+          logger.warn('Microphone access not granted: recordings will be silent until it is allowed');
+        }
+      });
+    }
 
     // The hook must not start without Accessibility (see KeyboardService.register);
     // wait for the grant instead so the app keeps running
@@ -233,6 +235,9 @@ export class PushToTalkService {
    * modally and blocks the main process (including the poll) until it is dismissed.
    */
   private showAccessibilityGuidance(): void {
+    const settings = settingsService.get();
+    if (settings.success === false || !settings.data.onboarding.completed) return;
+
     const parent = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed() && win.isVisible());
     const options: MessageBoxOptions = {
       type: 'warning',

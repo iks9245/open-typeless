@@ -224,3 +224,26 @@ main { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
 @media (prefers-reduced-motion: reduce) {
   .model-download-progress > div { transition: none; }
 }
+
+/* First-run setup shares the main window palette, including dark mode. */
+.onboarding-content { max-width: 760px; margin: 0 auto; padding: 30px 32px; display: flex; flex-direction: column; gap: 18px; }
+.onboarding-content h1 { margin-bottom: 2px; }
+.onboarding-languages { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.onboarding-languages legend { margin-bottom: 12px; }
+.onboarding-language { display: flex; align-items: center; gap: 12px; padding: 20px; font-size: 16px; cursor: pointer; }
+.onboarding-language:has(input:checked), .onboarding-model:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.onboarding-language input, .onboarding-model input { accent-color: var(--accent); }
+.onboarding-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+.onboarding-actions button { padding: 9px 20px; }
+.onboarding-model { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.onboarding-model-choice { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.onboarding-model button { align-self: flex-start; }
+.onboarding-model progress { width: 100%; accent-color: var(--accent); }
+.onboarding-content summary { cursor: pointer; padding: 8px 0; color: var(--accent); }
+.onboarding-content textarea { width: 100%; min-height: 140px; padding: 14px; resize: vertical; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.onboarding-shortcuts { margin: 0; display: grid; gap: 14px; }
+.onboarding-shortcuts div { display: flex; justify-content: space-between; gap: 16px; }
+.onboarding-shortcuts dd { margin: 0; font-weight: 600; }
+.onboarding .setting-row select { max-width: 70%; }
+.onboarding-content ol, .onboarding-content ul { margin: 0; padding-left: 24px; }
+.onboarding-content li + li { margin-top: 8px; }

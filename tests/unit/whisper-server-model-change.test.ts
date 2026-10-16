@@ -91,6 +91,19 @@ describe('whisper model changes', () => {
     await service.stop();
   });
 
+  it('starts after a first-run missing model is downloaded and selected', async () => {
+    const { service, deps, select } = setup();
+    deps.discovery.fileExists = file => file.endsWith('/whisper-server');
+    await service.start();
+    expect(service.status()).toMatchObject({ mode: 'unavailable', state: 'failed', reason: 'no ggml model found' });
+    expect(deps.spawn).not.toHaveBeenCalled();
+    select('app/cantonese.bin');
+    await service.modelChanged();
+    expect(service.status()).toMatchObject({ mode: 'managed', state: 'ready', modelId: 'app/cantonese.bin' });
+    expect(deps.spawn).toHaveBeenLastCalledWith(expect.any(String), expect.arrayContaining(['-m', '/app/models/cantonese.bin']), expect.any(Object));
+    await service.stop();
+  });
+
   it('leaves external servers running and explains the lock', async () => {
     const { service, deps, select } = setup(true);
     await service.start();

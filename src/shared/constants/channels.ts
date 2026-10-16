@@ -5,7 +5,13 @@
 
 export const IPC_CHANNELS = {
   MEMORY: { ASK: 'memory:ask', STATUS: 'memory:status', REINDEX: 'memory:reindex', HISTORY: 'memory:history', ANSWERED: 'ask:answered' },
+  PERMISSIONS: {
+    STATUS: 'permissions:status',
+    REQUEST_MICROPHONE: 'permissions:requestMicrophone',
+    OPEN_SETTINGS: 'permissions:openSettings',
+  },
   SYSTEM: {
+    INFO: 'system:info',
     GET_LOGIN_ITEM: 'system:get-login-item',
     SET_LOGIN_ITEM: 'system:set-login-item',
   },

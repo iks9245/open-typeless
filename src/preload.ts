@@ -11,7 +11,7 @@ import type { AskEntry } from './shared/types/memory';
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from './shared/constants/channels';
 import { asrEvents } from './preload-asr';
-import type { LoginItemState } from './shared/types/system';
+import type { LoginItemState, SystemInfo, PermissionsStatus, OnboardingPermission } from './shared/types/system';
 import type { ReportInput, SpeechReport } from './shared/types/report';
 import type { AppApi } from './types/global';
 import type { PolishInfo } from './shared/types/polish';
@@ -138,7 +138,13 @@ const polishApi = {
 
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('api', {
+  permissions: {
+    status: (): Promise<IpcResult<PermissionsStatus>> => ipcRenderer.invoke(IPC_CHANNELS.PERMISSIONS.STATUS),
+    requestMicrophone: (): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC_CHANNELS.PERMISSIONS.REQUEST_MICROPHONE),
+    openSettings: (type: OnboardingPermission): Promise<IpcResult<void>> => ipcRenderer.invoke(IPC_CHANNELS.PERMISSIONS.OPEN_SETTINGS, type),
+  },
   system: {
+    info: (): Promise<IpcResult<SystemInfo>> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM.INFO),
     getLoginItem: (): Promise<IpcResult<LoginItemState>> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM.GET_LOGIN_ITEM),
     setLoginItem: (enabled: boolean): Promise<IpcResult<LoginItemState>> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM.SET_LOGIN_ITEM, enabled),
   },

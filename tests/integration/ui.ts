@@ -9,6 +9,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import { wait } from './harness';
+import { settingsService } from '../../src/main/services/settings';
 import { registerTrustedWindow } from '../../src/main/ipc/sender';
 
 export interface UiDriver {
@@ -39,7 +40,13 @@ const element = (testId: string, index = 0): string =>
   `document.querySelectorAll(${selector(testId)})[${index}]`;
 
 /** Open the built main window with the real preload and wait for the UI to mount. */
-export async function openMainWindow(): Promise<UiDriver> {
+export async function openMainWindow(options: { onboarding?: boolean } = {}): Promise<UiDriver> {
+  // Existing UI scenarios exercise the tabs with fresh storage. Only wizard tests
+  // opt into first-run behavior; set this before creating/loading the renderer.
+  if (!options.onboarding) {
+    const result = settingsService.update({ onboarding: { completed: true, step: null } });
+    if (result.success === false) throw new Error(result.error);
+  }
   const html = process.env.INTEGRATION_RENDERER_HTML;
   const preload = process.env.INTEGRATION_PRELOAD;
   if (!html || !preload) throw new Error('Renderer not built; run through scripts/run-integration-tests.mjs');
@@ -154,6 +161,6 @@ export async function openMainWindow(): Promise<UiDriver> {
     },
   };
 
-  await driver.waitFor('tab-history', { timeoutMs: 10000 });
+  await driver.waitFor(options.onboarding ? 'onboarding-wizard' : 'tab-history', { timeoutMs: 10000 });
   return driver;
 }

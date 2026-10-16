@@ -48,7 +48,9 @@ export class WhisperServerService {
 
   /** Called by the settings subscription, including changes received during startup. */
   modelChanged(): Promise<void> {
-    return this.current.mode === 'managed' || this.current.mode === 'adopted'
+    // First-run startup can fail before any model is installed. A model selected
+    // after downloading must retry discovery as well as restart an owned server.
+    return this.current.mode === 'managed' || this.current.mode === 'adopted' || this.current.mode === 'unavailable'
       || (this.current.mode === 'none' && this.current.state === 'starting')
       ? this.restart() : Promise.resolve();
   }

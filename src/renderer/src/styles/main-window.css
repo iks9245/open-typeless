@@ -209,3 +209,18 @@ main { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
 .ask-source-highlight { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ask-history ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .ask-history h2 { margin-top: 24px; }
+
+/* Model downloads share the light/dark palette with the rest of settings. */
+.model-downloads { margin-top: 14px; }
+.model-downloads h3 { margin: 0; padding: 14px 18px; font-size: 14px; }
+.model-download-row { padding: 16px 18px; border-top: 1px solid var(--border); }
+.model-download-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.model-recommended { color: var(--accent); background: var(--accent-soft); }
+.model-installed { color: var(--success); }
+.model-download-actions { margin-top: 12px; flex-wrap: wrap; }
+.model-delete-confirm { flex-wrap: wrap; overflow-wrap: anywhere; }
+.model-download-progress { height: 7px; margin-top: 12px; background: var(--subtle); border-radius: 4px; overflow: hidden; }
+.model-download-progress > div { height: 100%; background: var(--accent); transition: width .2s linear; }
+@media (prefers-reduced-motion: reduce) {
+  .model-download-progress > div { transition: none; }
+}

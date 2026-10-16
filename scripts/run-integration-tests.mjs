@@ -63,10 +63,10 @@ if (files.some((name) => name.startsWith('main-window'))) {
   uiEnv.INTEGRATION_PRELOAD = preload;
 }
 
-const run = (bundle, tmp) => new Promise((resolve) => {
+const run = (bundle, tmp, file) => new Promise((resolve) => {
   const child = spawn(electron, [bundle], {
     cwd: root,
-    env: { ...process.env, ...uiEnv, INTEGRATION_TMP: tmp, OMLX_SETTINGS_PATH: path.join(tmp, 'omlx', 'settings.json'), ELECTRON_ENABLE_LOGGING: '0' },
+    env: { ...process.env, ...uiEnv, INTEGRATION_TMP: tmp, OMLX_SETTINGS_PATH: path.join(tmp, 'omlx', 'settings.json'), OPEN_TYPELESS_MODEL_CATALOG: file.startsWith('main-window-model-download') ? path.join(tmp, 'model-catalog.json') : '', ELECTRON_ENABLE_LOGGING: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
@@ -97,7 +97,7 @@ for (const file of files) {
 
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'open-typeless-it-'));
   const started = Date.now();
-  const { code, signal, output } = await run(bundle, tmp);
+  const { code, signal, output } = await run(bundle, tmp, file);
   rmSync(tmp, { recursive: true, force: true });
 
   // A scenario passes only if it ran to the end: an app that quit early (for example when

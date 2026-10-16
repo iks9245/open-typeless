@@ -1,3 +1,4 @@
+import type { ModelDownloadProgress } from './shared/types/model-download';
 import type { AskEntry } from './shared/types/memory';
 /**
  * Preload script for Electron.
@@ -155,6 +156,18 @@ contextBridge.exposeInMainWorld('api', {
   asr: asrApi,
   history: historyApi,
   settings: settingsApi,
+  models: {
+    catalog: () => ipcRenderer.invoke(IPC_CHANNELS.MODELS.CATALOG),
+    start: key => ipcRenderer.invoke(IPC_CHANNELS.MODELS.DOWNLOAD_START, key),
+    cancel: () => ipcRenderer.invoke(IPC_CHANNELS.MODELS.DOWNLOAD_CANCEL),
+    discard: key => ipcRenderer.invoke(IPC_CHANNELS.MODELS.DOWNLOAD_DISCARD, key),
+    delete: modelId => ipcRenderer.invoke(IPC_CHANNELS.MODELS.DELETE, modelId),
+    onProgress: callback => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: ModelDownloadProgress): void => { callback(progress); };
+      ipcRenderer.on(IPC_CHANNELS.MODELS.DOWNLOAD_PROGRESS, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.MODELS.DOWNLOAD_PROGRESS, handler); };
+    },
+  },
   whisperServer: whisperServerApi,
   polish: polishApi,
   report: {

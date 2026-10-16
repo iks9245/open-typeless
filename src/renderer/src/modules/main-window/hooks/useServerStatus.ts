@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { WhisperModelInfo, WhisperServerInfo } from '../../../../../shared/types/whisper-server';
 import { errorMessage } from '../lib/format';
 
-export function useServerStatus(active: boolean, model: string | null | undefined) {
+export function useServerStatus(active: boolean, model: string | null | undefined, revision = 0) {
   const [status, setStatus] = useState<WhisperServerInfo | null>(null);
   const [models, setModels] = useState<WhisperModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function useServerStatus(active: boolean, model: string | null | undefine
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [active, model]);
+  }, [active, model, revision]);
 
   return { status, models, modelsError, error, pending };
 }

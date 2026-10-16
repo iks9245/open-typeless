@@ -1,9 +1,10 @@
+import { ModelDownloads } from './ModelDownloads';
 import { effectivePolishStyle } from '../../../../../shared/lib/polish-style';
 import { useMemoryStatus, memoryStatusLabel } from '../hooks/useMemoryStatus';
 import { TRIGGER_KEYS, triggerKeyLabel } from '../../../../../shared/constants/keyboard';
 import { useLoginItem } from '../hooks/useLoginItem';
 import { DEFAULT_COMMAND_MODEL } from '../../../../../shared/constants/command';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSettings } from '../hooks/SettingsContext';
 import { usePolishStatus } from '../hooks/usePolishStatus';
 import { useServerStatus } from '../hooks/useServerStatus';
@@ -29,7 +30,9 @@ export function SettingsPanel({ active }: { active: boolean }) {
     finally { if (mounted.current) setReindexing(false); }
   };
   const mounted = useMounted();
-  const server = useServerStatus(active, settings?.asr.model);
+  const [modelsRevision, setModelsRevision] = useState(0);
+  const onModelsChanged = useCallback(() => setModelsRevision(value => value + 1), []);
+  const server = useServerStatus(active, settings?.asr.model, modelsRevision);
   const [openingModels, setOpeningModels] = useState(false);
   const openModelsFolder = async () => {
     if (openingModels) return;
@@ -133,6 +136,7 @@ export function SettingsPanel({ active }: { active: boolean }) {
             </dl>}
           </div>
         </div>
+        <ModelDownloads active={active} onModelsChanged={onModelsChanged} modelLocked={modelLocked !== null} />
       </section>
       <section className="settings-section" aria-labelledby="polish-heading"><h2 id="polish-heading">AI 潤稿</h2><div className="card">
         <SettingRow title="AI 潤稿" detail="用本機 oMLX 模型刪除贅字、補上標點、修正口誤並轉成繁體中文，文字不會離開這台電腦。">

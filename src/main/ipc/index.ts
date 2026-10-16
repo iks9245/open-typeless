@@ -1,3 +1,4 @@
+import { setupModelsHandlers } from './models.handler';
 import { setupMemoryHandlers } from './memory.handler';
 /**
  * IPC handler registration.
@@ -27,4 +28,5 @@ export function setupAllIpcHandlers(): void {
   setupHistoryHandlers();
   setupSettingsHandlers();
   setupWhisperServerHandlers();
+  setupModelsHandlers();
 }

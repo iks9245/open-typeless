@@ -45,6 +45,14 @@ export const IPC_CHANNELS = {
     /** Settings change (Main -> Renderer) */
     CHANGED: 'settings:changed',
   },
+  MODELS: {
+    CATALOG: 'models:catalog',
+    DOWNLOAD_START: 'models:download-start',
+    DOWNLOAD_CANCEL: 'models:download-cancel',
+    DOWNLOAD_DISCARD: 'models:download-discard',
+    DELETE: 'models:delete',
+    DOWNLOAD_PROGRESS: 'models:download-progress',
+  },
   WHISPER_SERVER: {
     /** Read the local whisper.cpp server status (Renderer -> Main) */
     STATUS: 'whisper-server:status',

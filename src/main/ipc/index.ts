@@ -1,3 +1,4 @@
+import { setupDiagnosticsHandlers } from './diagnostics.handler';
 import { setupModelsHandlers } from './models.handler';
 import { setupMemoryHandlers } from './memory.handler';
 /**
@@ -31,4 +32,5 @@ export function setupAllIpcHandlers(): void {
   setupSettingsHandlers();
   setupWhisperServerHandlers();
   setupModelsHandlers();
+  setupDiagnosticsHandlers();
 }

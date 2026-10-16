@@ -5,7 +5,9 @@
 
 import path from 'node:path';
 import { app, BrowserWindow, clipboard, nativeTheme } from 'electron';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { count } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { assert, run, test, until, wait } from './harness';
@@ -18,6 +20,10 @@ run(async () => {
   const { settingsService } = await import('../../src/main/services/settings');
   const { historyService } = await import('../../src/main/services/history');
   const { planVocabularyPrompt } = await import('../../src/shared/lib/vocabulary-prompt');
+  const { diagnosticsService } = await import('../../src/main/services/diagnostics');
+  const { setupDiagnosticsHandlers } = await import('../../src/main/ipc/diagnostics.handler');
+  let diagnosticsSavePath: string | null = null;
+  setupDiagnosticsHandlers({ service: diagnosticsService, savePath: async () => diagnosticsSavePath });
   setupAllIpcHandlers();
 
   // 60 completed dictations, one of them about coffee, plus failures and an empty session
@@ -67,7 +73,7 @@ run(async () => {
     const keys = await ui.exec<{ api: string[]; asr: string[] }>(`({
       api: Object.keys(window.api).sort(), asr: Object.keys(window.api.asr).sort()
     })`);
-    assert(JSON.stringify(keys.api) === JSON.stringify(['asr', 'history', 'memory', 'models', 'permissions', 'polish', 'report', 'settings', 'system', 'whisperServer']),
+    assert(JSON.stringify(keys.api) === JSON.stringify(['asr', 'diagnostics', 'history', 'memory', 'models', 'permissions', 'polish', 'report', 'settings', 'system', 'whisperServer']),
       'main API has no floatingWindow key', keys);
     assert(JSON.stringify(keys.asr) === JSON.stringify(['onError', 'onResult', 'onStatus', 'sendAudio']),
       'ASR API has no start or stop keys', keys);
@@ -384,6 +390,51 @@ run(async () => {
     await ui.selectLabel('history-status-filter', '失敗');
     await ui.waitUntil('command failure shown', `[...document.querySelectorAll('[data-testid="history-text"]')].some(el => el.textContent.includes('指令執行失敗'))`, 3000);
     await ui.selectLabel('history-status-filter', '全部');
+  });
+
+  await test('About renders versions, copies them and exports diagnostics without a native dialog', async () => {
+    await ui.click('tab-settings');
+    await ui.waitFor('about-versions');
+    const versions = await ui.text('about-versions');
+    for (const label of ['Open Typeless', app.getVersion(), 'whisper.cpp', 'Electron', process.versions.electron, 'macOS', '晶片', '記憶體']) {
+      assert(versions.includes(label), `version list contains ${label}`, versions);
+    }
+    assert(await ui.count('about-feedback') === 0, 'unset feedback button hidden');
+    const order = await ui.exec<string[]>(`[...document.querySelectorAll('#panel-settings .settings-section')].map(el => el.getAttribute('aria-labelledby'))`);
+    assert(order[order.length - 1] === 'about-heading', 'About is the last settings section');
+    clipboard.clear();
+    ui.window.show();
+    const deadline = Date.now() + 5000;
+    while (!(await ui.exec<boolean>('document.hasFocus()')) && Date.now() < deadline) {
+      ui.window.focus();
+      ui.window.webContents.focus();
+      await wait(100);
+    }
+    assert(await ui.exec<boolean>('document.hasFocus()'), 'version copy has document focus');
+    await ui.click('about-copy');
+    await until('version clipboard', () => clipboard.readText().startsWith(`Open Typeless: ${app.getVersion()}`));
+    assert(clipboard.readText().includes(`Electron: ${process.versions.electron}`), 'clipboard contains versions');
+    await ui.waitUntil('copy confirmation', `document.querySelector('[data-testid="about-copy"]').textContent === '已複製'`);
+    ui.window.hide();
+    // The injected dependency replaces only the native dialog; export/ditto remain real.
+    await ui.click('about-export-diagnostics');
+    await ui.waitUntil('cancel finished', `!document.querySelector('[data-testid="about-export-diagnostics"]').disabled`);
+    assert(await ui.count('about-export-saved') === 0, 'cancel has no saved message');
+    diagnosticsSavePath = path.join(app.getPath('userData'), 'diagnostics-ui.zip');
+    await ui.click('about-export-diagnostics');
+    await ui.waitFor('about-export-saved', { timeoutMs: 10000 });
+    assert((await ui.text('about-export-saved')).includes('已儲存 diagnostics-ui.zip'), 'saved filename shown');
+    assert(!(await ui.text('about-export-saved')).includes(app.getPath('userData')), 'no path reaches renderer');
+    assert(await ui.count('about-reveal') === 1, 'Finder action offered');
+    assert(existsSync(diagnosticsSavePath), 'real zip produced');
+    const extracted = path.join(app.getPath('userData'), 'diagnostics-extracted');
+    await promisify(execFile)('/usr/bin/ditto', ['-x', '-k', diagnosticsSavePath, extracted]);
+    const root = path.join(extracted, readdirSync(extracted)[0]);
+    const report = readFileSync(path.join(root, 'diagnostics.json'), 'utf8');
+    for (const forbidden of ['下午三點一起去喝咖啡吧', '你好世界', '翻譯成英文', 'Hello, world.', 'rawText', 'finalText', 'audioPath', '"meta"', '"id"']) {
+      assert(!report.includes(forbidden), `diagnostics excludes ${forbidden}`);
+    }
+    assert(JSON.parse(report).history.recent.length === 50, 'last fifty metadata rows exported');
   });
 
   await test('clearing history asks for confirmation, then shows the empty state', async () => {

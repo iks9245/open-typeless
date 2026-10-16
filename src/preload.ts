@@ -138,6 +138,12 @@ const polishApi = {
 
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('api', {
+  diagnostics: {
+    summary: () => ipcRenderer.invoke(IPC_CHANNELS.DIAGNOSTICS.SUMMARY),
+    export: () => ipcRenderer.invoke(IPC_CHANNELS.DIAGNOSTICS.EXPORT),
+    reveal: () => ipcRenderer.invoke(IPC_CHANNELS.DIAGNOSTICS.REVEAL),
+    feedback: () => ipcRenderer.invoke(IPC_CHANNELS.DIAGNOSTICS.FEEDBACK),
+  },
   permissions: {
     status: (): Promise<IpcResult<PermissionsStatus>> => ipcRenderer.invoke(IPC_CHANNELS.PERMISSIONS.STATUS),
     requestMicrophone: (): Promise<IpcResult<boolean>> => ipcRenderer.invoke(IPC_CHANNELS.PERMISSIONS.REQUEST_MICROPHONE),

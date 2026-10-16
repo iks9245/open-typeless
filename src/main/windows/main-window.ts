@@ -1,3 +1,4 @@
+import { forwardConsoleErrors } from './console';
 /** The main renderer records audio even while its window is hidden. */
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
@@ -30,6 +31,7 @@ export function createWindow(isQuitting: () => boolean, show = true): BrowserWin
   });
 
   registerTrustedWindow(mainWindow.webContents, 'main');
+  forwardConsoleErrors(mainWindow.webContents, 'main');
   hideOnClose(mainWindow, isQuitting);
 
   // and load the index.html of the app.

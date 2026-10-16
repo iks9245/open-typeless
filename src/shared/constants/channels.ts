@@ -4,6 +4,7 @@
  */
 
 export const IPC_CHANNELS = {
+  DIAGNOSTICS: { SUMMARY: 'diagnostics:summary', EXPORT: 'diagnostics:export', REVEAL: 'diagnostics:reveal', FEEDBACK: 'diagnostics:feedback' },
   MEMORY: { ASK: 'memory:ask', STATUS: 'memory:status', REINDEX: 'memory:reindex', HISTORY: 'memory:history', ANSWERED: 'ask:answered' },
   PERMISSIONS: {
     STATUS: 'permissions:status',

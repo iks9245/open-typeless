@@ -1,3 +1,4 @@
+import type { DiagnosticsSummary, DiagnosticsExportResult } from '../shared/types/diagnostics';
 import type { ModelCatalogState, ModelDownloadProgress } from '../shared/types/model-download';
 import type { AskResult, AskEntry, MemoryStatus } from '../shared/types/memory';
 /**
@@ -134,6 +135,12 @@ interface WhisperServerApi {
  * Application API exposed to the renderer process.
  */
 export interface AppApi {
+  diagnostics: {
+    summary: () => Promise<IpcResult<DiagnosticsSummary>>;
+    export: () => Promise<IpcResult<DiagnosticsExportResult>>;
+    reveal: () => Promise<IpcResult<void>>;
+    feedback: () => Promise<IpcResult<void>>;
+  };
   memory: {
     ask: (input: { question: string }) => Promise<IpcResult<AskResult>>;
     status: () => Promise<IpcResult<MemoryStatus>>;

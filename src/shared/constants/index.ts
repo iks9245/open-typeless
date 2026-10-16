@@ -19,3 +19,5 @@ export type {
 } from './history';
 
 export { TRIGGER_KEYS, triggerKeyLabel, type TriggerKeyId } from './keyboard';
+
+export { FEEDBACK_URL } from './support';

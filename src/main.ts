@@ -18,6 +18,9 @@ import { historyService } from './main/services/history';
 import { polishService } from './main/services/polish';
 import { whisperServerService } from './main/services/whisper-server';
 
+// Capture stacks without Electron's default uncaught-error dialog.
+log.errorHandler.startCatching({ showDialog: false });
+
 const logger = log.scope('main');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.

@@ -247,3 +247,11 @@ main { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
 .onboarding .setting-row select { max-width: 70%; }
 .onboarding-content ol, .onboarding-content ul { margin: 0; padding-left: 24px; }
 .onboarding-content li + li { margin-top: 8px; }
+
+.about-card { padding: 18px; }
+.about-versions { margin: 0 0 16px; font-size: 13px; }
+.about-versions > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; padding: 5px 0; }
+.about-versions dt { color: var(--muted); }
+.about-versions dd { margin: 0; overflow-wrap: anywhere; }
+.about-card > .help { margin: 18px 0 12px; }
+.about-saved { margin-top: 12px; overflow-wrap: anywhere; }

@@ -28,3 +28,5 @@ export type { AskResult, AskSource, AskEntry, MemoryStatus } from './memory';
 export type { ModelCatalogEntry, ModelCatalogState, ModelDownloadProgress } from './model-download';
 
 export type { LoginItemState, SystemInfo, PermissionsStatus, OnboardingPermission } from './system';
+
+export type { DiagnosticsSummary, DiagnosticsExportResult } from './diagnostics';

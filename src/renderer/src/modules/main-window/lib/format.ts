@@ -1,3 +1,4 @@
+import type { DiagnosticsSummary } from '../../../../../shared/types/diagnostics';
 import { effectivePolishStyle } from '../../../../../shared/lib/polish-style';
 import type { AppSettings } from '../../../../../shared/types/settings';
 import type { PolishUnavailableReason } from '../../../../../shared/types/polish';
@@ -111,4 +112,20 @@ export function formatReportDuration(milliseconds: number | null): string {
   if (minutes >= 60) return `${formatReportNumber(Math.floor(minutes / 60))} 小時 ${formatReportNumber(minutes % 60)} 分`;
   if (minutes > 0) return `${formatReportNumber(minutes)} 分鐘`;
   return `${formatReportNumber(seconds)} 秒`;
+}
+
+/** Shared by the on-screen version list and the plain-text clipboard block. */
+export function versionEntries(summary: DiagnosticsSummary): [string, string][] {
+  return [
+    ['Open Typeless', summary.app.version],
+    ['whisper.cpp', summary.app.whisperCpp ?? '未內建'],
+    ['Electron', summary.app.electron],
+    ['macOS', `${summary.system.version}（Darwin ${summary.system.release}）`],
+    ['晶片', summary.system.cpu],
+    ['記憶體', `${summary.system.totalMemoryGb.toFixed(1)} GB`],
+  ];
+}
+
+export function formatVersionInfo(summary: DiagnosticsSummary): string {
+  return versionEntries(summary).map(([label, value]) => `${label}: ${value}`).join('\n');
 }

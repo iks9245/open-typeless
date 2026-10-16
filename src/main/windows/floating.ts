@@ -1,3 +1,4 @@
+import { forwardConsoleErrors } from './console';
 import { keyboardService } from '../services/keyboard';
 import type { AskResult } from '../../shared/types/memory';
 import type { InputMode } from '../../shared/constants/command';
@@ -113,6 +114,7 @@ export class FloatingWindowManager {
     // this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
     registerTrustedWindow(this.window.webContents, 'floating');
+    forwardConsoleErrors(this.window.webContents, 'floating');
 
     // Load the floating window HTML
     if (FLOATING_WINDOW_VITE_DEV_SERVER_URL) {

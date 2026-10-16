@@ -1,3 +1,4 @@
+import { AboutSection } from './AboutSection';
 import { ModelDownloads } from './ModelDownloads';
 import { effectivePolishStyle } from '../../../../../shared/lib/polish-style';
 import { useMemoryStatus, memoryStatusLabel } from '../hooks/useMemoryStatus';
@@ -236,6 +237,7 @@ export function SettingsPanel({ active }: { active: boolean }) {
           </select>
         </SettingRow>
       </div></section>
+      <AboutSection active={active} />
     </div>
   );
 }
